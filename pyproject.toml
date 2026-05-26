@@ -4,4 +4,8 @@ version = "0.1.0"
 description = ""
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = ["wii-arena-dolphin-docker", "wii-arena-mario-kart"]
+
+[tool.uv.sources]
+wii-arena-dolphin-docker = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-dolphin-docker" }
+wii-arena-mario-kart = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-mario-kart" }
