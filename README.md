@@ -6,8 +6,6 @@ The Official AI Competition Environment for the 2026 KAIST–POSTECH Science War
 
 </div>
 
-
-
 ## Overview
 
 Participants implement an `Agent` that follows `wii_arena.core.agent.protocols.Agent`. The submitted agent will compete across multiple scenarios.
