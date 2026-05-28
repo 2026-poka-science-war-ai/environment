@@ -1,6 +1,25 @@
-def main():
-    print("Hello from environment!")
+from pathlib import Path
 
+import docker
+from wii_arena.core.agent.protocols import Agent
+from wii_arena.core.environment.types import Terminated, Truncated
+from wii_arena.dolphin import DolphinEnvironment
+from wii_arena.dolphin_docker_nvidia import NvidiaDockerDolphin
 
-if __name__ == "__main__":
-    main()
+from environment.scenario.services import MarioKartWiiGrandPrixScenario
+
+DOCKER_IMAGE = docker.from_env().images.get("ghcr.io/betarixm/wii-arena-dolphin:latest")
+ISO_FILE: Path = ...
+AGENT: Agent = ...
+
+with DolphinEnvironment(
+    scenario=MarioKartWiiGrandPrixScenario(
+        dolphin=NvidiaDockerDolphin(docker_image=DOCKER_IMAGE, wii_iso_file=ISO_FILE)
+    )
+).session() as environment:
+    observation, context = environment.reset()
+    terminated, truncated = Terminated(False), Truncated(False)
+
+    while not (terminated or truncated):
+        action = AGENT.act(observation)
+        observation, terminated, truncated, context = environment.step(action=action)

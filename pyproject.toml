@@ -4,8 +4,17 @@ version = "0.1.0"
 description = ""
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = ["wii-arena-dolphin-docker", "wii-arena-mario-kart"]
+dependencies = [
+    "wii-arena-core",
+    "wii-arena-dlpack",
+    "wii-arena-dolphin-docker",
+]
+
+[dependency-groups]
+nvidia-docker = ["wii-arena-dolphin-docker-nvidia"]
 
 [tool.uv.sources]
-wii-arena-dolphin-docker = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-dolphin-docker" }
-wii-arena-mario-kart = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-mario-kart" }
+wii-arena-core = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-core", rev = "1d6f6c692a3c6d3f9ed166fc191c153afaa52086" }
+wii-arena-dlpack = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-dlpack", rev = "1d6f6c692a3c6d3f9ed166fc191c153afaa52086" }
+wii-arena-dolphin-docker = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-dolphin-docker", rev = "1d6f6c692a3c6d3f9ed166fc191c153afaa52086" }
+wii-arena-dolphin-docker-nvidia = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-dolphin-docker-nvidia", rev = "1d6f6c692a3c6d3f9ed166fc191c153afaa52086" }
