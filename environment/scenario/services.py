@@ -8,10 +8,12 @@ from wii_arena.dolphin import (
     DolphinScenario,
 )
 
+from .models import RaceConfiguration
+
 _LOGGER = logging.getLogger(__name__)
 
 
-class MarioKartWiiGrandPrixScenario(DolphinScenario):
+class MarioKartWiiRace(DolphinScenario):
     class Session(DolphinScenario.Session):
         def terminated(self) -> Terminated:
             _LOGGER.debug("Checking Grand Prix terminated state")
@@ -23,22 +25,22 @@ class MarioKartWiiGrandPrixScenario(DolphinScenario):
             # TODO: implement this method to determine if the Grand Prix scenario in Mario Kart Wii has been truncated
             return Truncated(False)
 
-    def __init__(self, dolphin: Dolphin):
+    def __init__(self, configuration: RaceConfiguration, dolphin: Dolphin):
+        self._configuration = configuration
         self._dolphin = dolphin
         _LOGGER.debug(
-            "Initialized MarioKartWiiGrandPrixScenario with dolphin=%s",
+            "Initialized MarioKartWiiRace with configuration=%s and dolphin=%s",
+            configuration,
             type(dolphin).__name__,
         )
 
     @contextmanager
-    def session(self) -> Iterator[MarioKartWiiGrandPrixScenario.Session]:
-        _LOGGER.info("Opening MarioKartWiiGrandPrixScenario session")
+    def session(self) -> Iterator[MarioKartWiiRace.Session]:
+        _LOGGER.info("Opening MarioKartWiiRace session")
         with self._dolphin.session() as dolphin_session:
             # TODO: e.g. navigating the Dolphin emulator to the Grand Prix mode in Mario Kart Wii.
-            scenario_session = MarioKartWiiGrandPrixScenario.Session(
-                dolphin_session=dolphin_session
-            )
+            scenario_session = MarioKartWiiRace.Session(dolphin_session=dolphin_session)
             _LOGGER.debug("Mario Kart scenario session ready")
             yield scenario_session
-            _LOGGER.info("Closing MarioKartWiiGrandPrixScenario session")
+            _LOGGER.info("Closing MarioKartWiiRace session")
             # TODO: e.g. cleaning up after the Grand Prix scenario in Mario Kart Wii.
