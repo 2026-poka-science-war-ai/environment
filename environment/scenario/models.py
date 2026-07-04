@@ -114,7 +114,6 @@ class Player(BaseModel):
 
 class RaceConfiguration(BaseModel):
     players: list[Player]
-    online_mode: bool
     mode: Mode
     course: Course
     cc: Cc
@@ -127,8 +126,8 @@ class RaceConfiguration(BaseModel):
     @field_validator("players")
     @classmethod
     def validate_players(cls, players: list[Player]) -> list[Player]:
-        if len(players) not in {1, 4, 12}:
+        if len(players) not in {1, 4}:
             raise ValueError(
-                f"players must contain exactly 1, 4, or 12 players, got {len(players)}"
+                f"players must contain exactly 1 or 4 players, got {len(players)}"
             )
         return players
