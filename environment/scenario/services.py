@@ -9,6 +9,7 @@ from wii_arena.dolphin import (
 )
 
 from .models import RaceConfiguration
+from .navigation import navigate
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ class MarioKartWiiRace(DolphinScenario):
     def session(self) -> Iterator[MarioKartWiiRace.Session]:
         _LOGGER.info("Opening MarioKartWiiRace session")
         with self._dolphin.session() as dolphin_session:
-            # TODO: e.g. navigating the Dolphin emulator to the race menus in Mario Kart Wii.
+            navigate(dolphin_session, self._configuration)
             scenario_session = MarioKartWiiRace.Session(dolphin_session=dolphin_session)
             _LOGGER.debug("Mario Kart scenario session ready")
             yield scenario_session
