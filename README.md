@@ -34,14 +34,14 @@ from wii_arena.core.environment.types import Terminated, Truncated
 from wii_arena.dolphin import DolphinEnvironment
 from wii_arena.dolphin_docker_nvidia import NvidiaDockerDolphin
 
-from environment.scenario.services import MarioKartWiiGrandPrixScenario
+from environment.scenario.services import MarioKartWiiRace
 
 DOCKER_IMAGE = docker.from_env().images.get("ghcr.io/betarixm/wii-arena-dolphin:latest")
 ISO_FILE: Path = ...
 AGENT: Agent = ...
 
 with DolphinEnvironment(
-    scenario=MarioKartWiiGrandPrixScenario(
+    scenario=MarioKartWiiRace(
         dolphin=NvidiaDockerDolphin(docker_image=DOCKER_IMAGE, wii_iso_file=ISO_FILE)
     )
 ).session() as environment:
@@ -77,12 +77,12 @@ from wii_arena.cuda_driver import CudaDriver
 from wii_arena.dolphin import DolphinEnvironment
 from wii_arena.dolphin_local import LocalDolphin
 
-from environment.scenario.services import MarioKartWiiGrandPrixScenario
+from environment.scenario.services import MarioKartWiiRace
 
 AGENT: Agent = ...
 
 with DolphinEnvironment(
-    scenario=MarioKartWiiGrandPrixScenario(
+    scenario=MarioKartWiiRace(
         dolphin=LocalDolphin(
             executable_path=DOLPHIN_EXECUTABLE,
             vulcan_layer_path=VULKAN_LAYER_LIBRARY,
