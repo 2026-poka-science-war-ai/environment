@@ -15,7 +15,7 @@ from .types import (
     VehicleSize,
 )
 
-_CHARACTER_SIZES: dict[Character, VehicleSize] = {
+CHARACTER_SIZES: dict[Character, VehicleSize] = {
     "Baby Mario": "small",
     "Baby Luigi": "small",
     "Baby Peach": "small",
@@ -82,15 +82,6 @@ _VEHICLE_SIZES: dict[Vehicle, VehicleSize] = {
 }
 
 
-def _get_character_size(character: Character) -> VehicleSize:
-    if character in _CHARACTER_SIZES:
-        return _CHARACTER_SIZES[character]
-    raise ValueError(
-        f"{character} size cannot be inferred. "
-        "Use a non-Mii character or add explicit Mii size handling."
-    )
-
-
 def _get_vehicle_size(vehicle: Vehicle) -> VehicleSize:
     return _VEHICLE_SIZES[vehicle]
 
@@ -102,7 +93,7 @@ class Player(BaseModel):
 
     @model_validator(mode="after")
     def validate_vehicle_size(self) -> "Player":
-        target_size = _get_character_size(self.character)
+        target_size = CHARACTER_SIZES[self.character]
         selected_vehicle_size = _get_vehicle_size(self.vehicle)
         if selected_vehicle_size != target_size:
             raise ValueError(
