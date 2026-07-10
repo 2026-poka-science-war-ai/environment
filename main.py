@@ -1,28 +1,28 @@
 from pathlib import Path
 
 import docker
-from wii_arena.core.agent.protocols import Agent
-from wii_arena.core.environment.types import Terminated, Truncated
 from wii_arena.dolphin import DolphinEnvironment
 from wii_arena.dolphin_docker_nvidia import NvidiaDockerDolphin
 
+from environment.arena import Arena, Team
 from environment.scenario.models import RaceConfiguration
 from environment.scenario.services import MarioKartWiiRace
 
 DOCKER_IMAGE = docker.from_env().images.get("ghcr.io/betarixm/wii-arena-dolphin:latest")
 ISO_FILE: Path = ...
-AGENT: Agent = ...
 CONFIGURATION: RaceConfiguration = ...
+TEAM_A: Team = ...
+TEAM_B: Team = ...
 
-with DolphinEnvironment(
-    scenario=MarioKartWiiRace(
-        configuration=CONFIGURATION,
-        dolphin=NvidiaDockerDolphin(docker_image=DOCKER_IMAGE, wii_iso_file=ISO_FILE),
-    )
-).session() as environment:
-    observation, context = environment.reset()
-    terminated, truncated = Terminated(False), Truncated(False)
-
-    while not (terminated or truncated):
-        action = AGENT.act(observation)
-        observation, terminated, truncated, context = environment.step(action=action)
+for _ in Arena(
+    environment=DolphinEnvironment(
+        scenario=MarioKartWiiRace(
+            configuration=CONFIGURATION,
+            dolphin=NvidiaDockerDolphin(
+                docker_image=DOCKER_IMAGE, wii_iso_file=ISO_FILE
+            ),
+        )
+    ),
+    teams=(TEAM_A, TEAM_B),
+).stream():
+    ...
