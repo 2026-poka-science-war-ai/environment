@@ -15,9 +15,9 @@ nvidia-docker = ["wii-arena-dolphin-docker-nvidia"]
 nvidia-local = ["wii-arena-dolphin-local", "wii-arena-cuda-driver"]
 
 [tool.uv.sources]
-wii-arena-core = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-core", rev = "3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" }
-wii-arena-dlpack = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-dlpack", rev = "3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" }
-wii-arena-dolphin-docker = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-dolphin-docker", rev = "3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" }
-wii-arena-dolphin-docker-nvidia = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-dolphin-docker-nvidia", rev = "3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" }
-wii-arena-dolphin-local = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-dolphin-local", rev = "3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" }
-wii-arena-cuda-driver = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-cuda-driver", rev = "3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" }
+wii-arena-core = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-core", rev = "cd8136979fa9418f7f0c184a5db45b82fa4369b5" }
+wii-arena-dlpack = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-dlpack", rev = "cd8136979fa9418f7f0c184a5db45b82fa4369b5" }
+wii-arena-dolphin-docker = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-dolphin-docker", rev = "cd8136979fa9418f7f0c184a5db45b82fa4369b5" }
+wii-arena-dolphin-docker-nvidia = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-dolphin-docker-nvidia", rev = "cd8136979fa9418f7f0c184a5db45b82fa4369b5" }
+wii-arena-dolphin-local = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-dolphin-local", rev = "cd8136979fa9418f7f0c184a5db45b82fa4369b5" }
+wii-arena-cuda-driver = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-cuda-driver", rev = "cd8136979fa9418f7f0c184a5db45b82fa4369b5" }

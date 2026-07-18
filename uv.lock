@@ -120,16 +120,16 @@ nvidia-local = [
 
 [package.metadata]
 requires-dist = [
-    { name = "wii-arena-core", git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-core&rev=3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" },
-    { name = "wii-arena-dlpack", git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dlpack&rev=3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" },
-    { name = "wii-arena-dolphin-docker", git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dolphin-docker&rev=3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" },
+    { name = "wii-arena-core", git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-core&rev=cd8136979fa9418f7f0c184a5db45b82fa4369b5" },
+    { name = "wii-arena-dlpack", git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dlpack&rev=cd8136979fa9418f7f0c184a5db45b82fa4369b5" },
+    { name = "wii-arena-dolphin-docker", git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dolphin-docker&rev=cd8136979fa9418f7f0c184a5db45b82fa4369b5" },
 ]
 
 [package.metadata.requires-dev]
-nvidia-docker = [{ name = "wii-arena-dolphin-docker-nvidia", git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dolphin-docker-nvidia&rev=3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" }]
+nvidia-docker = [{ name = "wii-arena-dolphin-docker-nvidia", git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dolphin-docker-nvidia&rev=cd8136979fa9418f7f0c184a5db45b82fa4369b5" }]
 nvidia-local = [
-    { name = "wii-arena-cuda-driver", git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-cuda-driver&rev=3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" },
-    { name = "wii-arena-dolphin-local", git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dolphin-local&rev=3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" },
+    { name = "wii-arena-cuda-driver", git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-cuda-driver&rev=cd8136979fa9418f7f0c184a5db45b82fa4369b5" },
+    { name = "wii-arena-dolphin-local", git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dolphin-local&rev=cd8136979fa9418f7f0c184a5db45b82fa4369b5" },
 ]
 
 [[package]]
@@ -284,12 +284,12 @@ wheels = [
 [[package]]
 name = "wii-arena-core"
 version = "0.1.0"
-source = { git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-core&rev=3e6c23be7d5d5598ae2b4b8c6684d252eba70eea#3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" }
+source = { git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-core&rev=cd8136979fa9418f7f0c184a5db45b82fa4369b5#cd8136979fa9418f7f0c184a5db45b82fa4369b5" }
 
 [[package]]
 name = "wii-arena-cuda-driver"
 version = "0.1.0"
-source = { git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-cuda-driver&rev=3e6c23be7d5d5598ae2b4b8c6684d252eba70eea#3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" }
+source = { git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-cuda-driver&rev=cd8136979fa9418f7f0c184a5db45b82fa4369b5#cd8136979fa9418f7f0c184a5db45b82fa4369b5" }
 dependencies = [
     { name = "cupy-cuda13x" },
     { name = "wii-arena-dlpack" },
@@ -298,12 +298,12 @@ dependencies = [
 [[package]]
 name = "wii-arena-dlpack"
 version = "0.1.0"
-source = { git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dlpack&rev=3e6c23be7d5d5598ae2b4b8c6684d252eba70eea#3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" }
+source = { git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dlpack&rev=cd8136979fa9418f7f0c184a5db45b82fa4369b5#cd8136979fa9418f7f0c184a5db45b82fa4369b5" }
 
 [[package]]
 name = "wii-arena-dolphin"
 version = "0.1.0"
-source = { git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dolphin&rev=3e6c23be7d5d5598ae2b4b8c6684d252eba70eea#3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" }
+source = { git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dolphin&rev=cd8136979fa9418f7f0c184a5db45b82fa4369b5#cd8136979fa9418f7f0c184a5db45b82fa4369b5" }
 dependencies = [
     { name = "pydantic" },
     { name = "wii-arena-core" },
@@ -313,7 +313,7 @@ dependencies = [
 [[package]]
 name = "wii-arena-dolphin-docker"
 version = "0.1.0"
-source = { git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dolphin-docker&rev=3e6c23be7d5d5598ae2b4b8c6684d252eba70eea#3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" }
+source = { git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dolphin-docker&rev=cd8136979fa9418f7f0c184a5db45b82fa4369b5#cd8136979fa9418f7f0c184a5db45b82fa4369b5" }
 dependencies = [
     { name = "docker" },
     { name = "wii-arena-dlpack" },
@@ -323,7 +323,7 @@ dependencies = [
 [[package]]
 name = "wii-arena-dolphin-docker-nvidia"
 version = "0.1.0"
-source = { git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dolphin-docker-nvidia&rev=3e6c23be7d5d5598ae2b4b8c6684d252eba70eea#3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" }
+source = { git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dolphin-docker-nvidia&rev=cd8136979fa9418f7f0c184a5db45b82fa4369b5#cd8136979fa9418f7f0c184a5db45b82fa4369b5" }
 dependencies = [
     { name = "wii-arena-cuda-driver" },
     { name = "wii-arena-dolphin-docker" },
@@ -332,7 +332,7 @@ dependencies = [
 [[package]]
 name = "wii-arena-dolphin-local"
 version = "0.1.0"
-source = { git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dolphin-local&rev=3e6c23be7d5d5598ae2b4b8c6684d252eba70eea#3e6c23be7d5d5598ae2b4b8c6684d252eba70eea" }
+source = { git = "https://github.com/betarixm/wii-arena?subdirectory=packages%2Fwii-arena-dolphin-local&rev=cd8136979fa9418f7f0c184a5db45b82fa4369b5#cd8136979fa9418f7f0c184a5db45b82fa4369b5" }
 dependencies = [
     { name = "wii-arena-dlpack" },
     { name = "wii-arena-dolphin" },
