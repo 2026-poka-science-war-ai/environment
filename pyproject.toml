@@ -5,6 +5,7 @@ description = ""
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "pynvvideocodec==2.0.4",
     "wii-arena-core",
     "wii-arena-dlpack",
     "wii-arena-dolphin-docker",

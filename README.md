@@ -22,6 +22,11 @@ docker pull ghcr.io/betarixm/wii-arena-dolphin:latest
 ```
 
 ```bash
+apt update
+apt install ffmpeg
+```
+
+```bash
 uv add "environment[nvidia-docker]@git+https://github.com/2026-poka-science-war-ai/environment.git"
 ```
 
@@ -33,34 +38,38 @@ from wii_arena.dolphin import DolphinEnvironment
 from wii_arena.dolphin_docker_nvidia import NvidiaDockerDolphin
 
 from environment.arena import Arena, Team
+from environment.record import Recorder
 from environment.scenario.models import RaceConfiguration
 from environment.scenario.services import MarioKartWiiRace
 
 DOCKER_IMAGE = docker.from_env().images.get("ghcr.io/betarixm/wii-arena-dolphin:latest")
 ISO_FILE: Path = ...
+VIDEO_FILE: Path = ...
 CONFIGURATION: RaceConfiguration = ...
 TEAM_A: Team = ...
 TEAM_B: Team = ...
 
-for _ in Arena(
-    environment=DolphinEnvironment(
-        scenario=MarioKartWiiRace(
-            configuration=CONFIGURATION,
-            dolphin=NvidiaDockerDolphin(
-                docker_image=DOCKER_IMAGE, wii_iso_file=ISO_FILE
+with Recorder(video_file=VIDEO_FILE) as recorder:
+    recorder.record(
+        Arena(
+            environment=DolphinEnvironment(
+                scenario=MarioKartWiiRace(
+                    configuration=CONFIGURATION,
+                    dolphin=NvidiaDockerDolphin(
+                        docker_image=DOCKER_IMAGE, wii_iso_file=ISO_FILE
+                    ),
+                )
             ),
-        )
-    ),
-    teams=(TEAM_A, TEAM_B),
-).stream():
-    ...
+            teams=(TEAM_A, TEAM_B),
+        ).stream()
+    )
 ```
 
 ### Local Environment with NVIDIA Support
 
 ```bash
 apt update
-apt install libbluetooth3 libhidapi-hidraw0 libspng0 libpugixml1v5 libqt6core6t64 libqt6dbus6t64
+apt install libbluetooth3 libhidapi-hidraw0 libspng0 libpugixml1v5 libqt6core6t64 libqt6dbus6t64 ffmpeg
 ```
 
 ```bash
@@ -79,6 +88,7 @@ from wii_arena.dolphin import DolphinEnvironment
 from wii_arena.dolphin_local import LocalDolphin
 
 from environment.arena import Arena, Team
+from environment.record import Recorder
 from environment.scenario.models import RaceConfiguration
 from environment.scenario.services import MarioKartWiiRace
 
@@ -86,22 +96,24 @@ CONFIGURATION: RaceConfiguration = ...
 TEAM_A: Team = ...
 TEAM_B: Team = ...
 
-for _ in Arena(
-    environment=DolphinEnvironment(
-        scenario=MarioKartWiiRace(
-            configuration=CONFIGURATION,
-            dolphin=LocalDolphin(
-                executable_path=DOLPHIN_EXECUTABLE,
-                vulcan_layer_path=VULKAN_LAYER_LIBRARY,
-                vulkan_layer_configuration_path=VULKAN_LAYER_CONFIG,
-                wii_iso_file=ISO_FILE,
-                driver=CudaDriver(),
+with Recorder(video_file=VIDEO_FILE) as recorder:
+    recorder.record(
+        Arena(
+            environment=DolphinEnvironment(
+                scenario=MarioKartWiiRace(
+                    configuration=CONFIGURATION,
+                    dolphin=LocalDolphin(
+                        executable_path=DOLPHIN_EXECUTABLE,
+                        vulcan_layer_path=VULKAN_LAYER_LIBRARY,
+                        vulkan_layer_configuration_path=VULKAN_LAYER_CONFIG,
+                        wii_iso_file=ISO_FILE,
+                        driver=CudaDriver(),
+                    ),
+                )
             ),
-        )
-    ),
-    teams=(TEAM_A, TEAM_B),
-).stream():
-    ...
+            teams=(TEAM_A, TEAM_B),
+        ).stream()
+    )
 ```
 
 ## Environment Behavior
