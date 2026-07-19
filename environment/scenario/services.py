@@ -11,7 +11,7 @@ from wii_arena.dolphin import (
 )
 
 from .models import RaceConfiguration
-from .navigation import navigate
+from .functions import navigate
 
 _LOGGER = logging.getLogger(__name__)
 
