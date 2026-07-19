@@ -72,7 +72,7 @@ class Recorder:
                 self._frame_rate,
                 self._video_file,
             )
-        assert self._process.stdin is not None
+        assert self._encoder is not None and self._process.stdin is not None
         for packet in self._encoder.Encode(_CudaFrame(pixels)):
             self._process.stdin.write(bytes(packet["data"]))
 
