@@ -85,7 +85,9 @@ class Recorder:
                 f"Unsupported frame format {frame.frame_format}. "
                 f"Supported formats are {sorted(_PIXEL_FORMATS)}."
             )
-        return _import_pynvvideocodec().CreateEncoder(
+        import PyNvVideoCodec
+
+        return PyNvVideoCodec.CreateEncoder(
             frame.width,
             frame.height,
             pixel_format,
@@ -121,18 +123,6 @@ class _CudaFrame:
 
     def cuda(self) -> Any:
         return self._array
-
-
-def _import_pynvvideocodec() -> Any:
-    import ast
-
-    if not hasattr(ast, "Str"):
-        # PyNvVideoCodec 2.0.4 imports `ast.Str`, removed in Python 3.12, without using it.
-        ast.Str = str  # type: ignore[attr-defined]
-
-    import PyNvVideoCodec
-
-    return PyNvVideoCodec
 
 
 def _frame_to_cuda_array(frame: DolphinFrameBuffer) -> Any:
