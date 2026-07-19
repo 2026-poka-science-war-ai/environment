@@ -26,8 +26,6 @@ Character = Literal[
     "Rosalina",
     "Funky Kong",
     "Dry Bowser",
-    "Mii A",
-    "Mii B",
 ]
 Vehicle = Literal[
     "Standard Kart S",
