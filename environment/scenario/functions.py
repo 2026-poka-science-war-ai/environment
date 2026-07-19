@@ -47,7 +47,7 @@ def _click(
     press_frames: int = 3,
 ) -> None:
     action = _to_action(inputs)
-    idle_action = [
+    idle_action: DolphinAction = [
         DolphinGameCubeControllerNoOp(),
         DolphinGameCubeControllerNoOp(),
         DolphinGameCubeControllerNoOp(),
@@ -57,6 +57,15 @@ def _click(
         session.execute(action)
     for _ in range(idle_frames):
         session.execute(idle_action)
+
+
+_SINGLE_PLAYER_MENU: tuple[str, ...] = (
+    "Grand Prix",
+    "Time Trials",
+    "VS Race",
+    "Battle",
+)
+_MULTIPLAYER_MENU: tuple[str, ...] = ("VS Race", "Battle")
 
 
 CHARACTER_POSITION_MAP: dict[Character, tuple[int, int]] = {
@@ -84,6 +93,16 @@ CHARACTER_POSITION_MAP: dict[Character, tuple[int, int]] = {
     "Rosalina": (5, 1),
     "Funky Kong": (5, 2),
     "Dry Bowser": (5, 3),
+}
+
+_SHARED_ROW = max(row for row, _ in CHARACTER_POSITION_MAP.values()) + 1
+_SHARED_COLUMN = max(column for _, column in CHARACTER_POSITION_MAP.values())
+
+_CHARACTER_DEFAULTS: dict[int, Character] = {
+    1: "Mario",
+    2: "Luigi",
+    3: "Yoshi",
+    4: "Peach",
 }
 
 _VEHICLE_CHOICE_GRID: dict[VehicleSize, dict[str, tuple[tuple[Vehicle, ...], ...]]] = {
@@ -280,29 +299,23 @@ def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None
     )
     _enter_main_menu(session, num_racers)
 
-    if num_racers == 1:
-        _click(session, {1: _A}, idle_frames=300)
-        _click(session, {1: _DOWN}, idle_frames=10)
-        _click(session, {1: _DOWN}, idle_frames=10)
-        _click(
-            session, {1: _A}, idle_frames=100
-        )  # select VS Race in ["VS Race", "Battle"]
-    else:
-        for _ in range(3):
-            _click(session, {1: _RIGHT}, idle_frames=10)
-        _click(session, {1: _A})
+    for _ in range(num_racers - 1):
+        _click(session, {1: _RIGHT}, idle_frames=10)
+    _click(session, {1: _A}, idle_frames=300)
 
-        _click(session, {2: _A}, idle_frames=10)
-        _click(session, {3: _A}, idle_frames=10)
-        _click(session, {4: _A}, idle_frames=10)
+    if num_racers == 1:
+        menu = _SINGLE_PLAYER_MENU
+    else:
+        menu = _MULTIPLAYER_MENU
+        for player in range(2, num_racers + 1):
+            _click(session, {player: _A}, idle_frames=10)
         _click(session, {}, idle_frames=50)
         _click(session, {1: _A}, idle_frames=100)
 
-        _click(
-            session, {1: _A}, idle_frames=100
-        )  # select VS Race in ["VS Race", "Battle"]
+    for _ in range(menu.index("VS Race")):
+        _click(session, {1: _DOWN}, idle_frames=10)
+    _click(session, {1: _A}, idle_frames=100)
 
-    # setting rules (CC, CPU, etc.)
     _click(session, {1: _UP}, idle_frames=10)
     _click(session, {1: _A}, idle_frames=100)
     _select_rules(session, configuration)
@@ -317,12 +330,8 @@ def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None
     _select_character(session, configuration)
 
     if configuration.mode == "team":
-        if num_racers == 1:
-            # Team select
-            _click(session, {1: _A})
-        else:
-            # Team select (1, 3p select red team, 2, 4p select green team)
-            _click(session, {1: _A, 2: _A, 3: _A, 4: _A})
+        _click(session, {player: _A for player in range(1, num_racers + 1)})
+        if num_racers > 1:
             _click(session, {1: _A})
 
     _select_vehicle(session, configuration)
@@ -386,47 +395,21 @@ def _select_character(
     racers = configuration.racers
     num_racers = len(racers)
 
-    if num_racers == 4:
-        _click(session, {4: _DOWN}, idle_frames=10)
-        _click(session, {4: _DOWN}, idle_frames=10)
-        _click(session, {4: _DOWN}, idle_frames=10)
-        _click(session, {4: _DOWN}, idle_frames=10)
-        _click(session, {4: _RIGHT}, idle_frames=10)
+    for player in reversed(range(1, num_racers + 1)):
+        row, column = CHARACTER_POSITION_MAP[_CHARACTER_DEFAULTS[player]]
+        for _ in range(_SHARED_COLUMN - column):
+            _click(session, {player: _RIGHT}, idle_frames=10)
+        for _ in range(_SHARED_ROW - row):
+            _click(session, {player: _DOWN}, idle_frames=10)
 
-        _click(session, {3: _RIGHT}, idle_frames=10)
-        _click(session, {3: _RIGHT}, idle_frames=10)
-        _click(session, {3: _DOWN}, idle_frames=10)
-        _click(session, {3: _DOWN}, idle_frames=10)
-        _click(session, {3: _DOWN}, idle_frames=10)
-        _click(session, {3: _RIGHT}, idle_frames=10)
-
-        _click(session, {2: _RIGHT}, idle_frames=10)
-        _click(session, {2: _DOWN}, idle_frames=10)
-        _click(session, {2: _DOWN}, idle_frames=10)
-        _click(session, {2: _DOWN}, idle_frames=10)
-        _click(session, {2: _DOWN}, idle_frames=10)
-        _click(session, {2: _RIGHT}, idle_frames=10)
-
-    _click(session, {1: _RIGHT}, idle_frames=10)
-    _click(session, {1: _RIGHT}, idle_frames=10)
-    _click(session, {1: _DOWN}, idle_frames=10)
-    _click(session, {1: _DOWN}, idle_frames=10)
-    _click(session, {1: _DOWN}, idle_frames=10)
-    _click(session, {1: _DOWN}, idle_frames=10)
-    _click(session, {1: _RIGHT}, idle_frames=10)
-
-    selected_coordinate: list[tuple[int, int]] = []
-    selected_choices: list[tuple[int, int]] = []
-    for player in range(1, num_racers + 1):
-        coordinate = CHARACTER_POSITION_MAP[racers[player - 1].character]
-        selected_coordinate.append(coordinate)
-        selected_choices.append((player, coordinate[0] * 4 + coordinate[1]))
-
-    for player, _ in sorted(selected_choices, key=lambda x: x[1]):
-        row, col = selected_coordinate[player - 1]
-        for _ in range(6 - row):
+    for player in sorted(
+        range(1, num_racers + 1),
+        key=lambda seat: CHARACTER_POSITION_MAP[racers[seat - 1].character],
+    ):
+        row, column = CHARACTER_POSITION_MAP[racers[player - 1].character]
+        for _ in range(_SHARED_ROW - row):
             _click(session, {player: _UP}, idle_frames=10)
-        for _ in range(3 - col):
+        for _ in range(_SHARED_COLUMN - column):
             _click(session, {player: _LEFT}, idle_frames=10)
         _click(session, {player: _A}, idle_frames=10)
 
