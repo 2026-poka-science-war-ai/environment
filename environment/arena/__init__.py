@@ -8,19 +8,17 @@ from wii_arena.dolphin import (
     DolphinEnvironment,
     DolphinFrameBuffer,
     DolphinGameCubeControllerInput,
-    DolphinMemoryView,
+    DolphinObservation,
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-RawObservation = tuple[DolphinMemoryView, DolphinFrameBuffer]
 
 _FIRST_TEAM_SEATS = (1, 3)
 _SECOND_TEAM_SEATS = (2, 4)
 
 
 class ObservationResolver[TObs](Protocol):
-    def resolve(self, observation: RawObservation, seat: int) -> TObs: ...
+    def resolve(self, observation: DolphinObservation, seat: int) -> TObs: ...
 
 
 class Model[TObs](Protocol):
@@ -34,12 +32,12 @@ class Team[TObs]:
     model: Model[TObs]
 
 
-class TeamSeatAgent[TObs](Agent[RawObservation, DolphinGameCubeControllerInput]):
+class TeamSeatAgent[TObs](Agent[DolphinObservation, DolphinGameCubeControllerInput]):
     def __init__(self, team: Team[TObs], seat: int) -> None:
         self._team = team
         self._seat = seat
 
-    def act(self, observation: RawObservation) -> DolphinGameCubeControllerInput:
+    def act(self, observation: DolphinObservation) -> DolphinGameCubeControllerInput:
         return self._team.model.act(
             self._team.resolver.resolve(observation, self._seat)
         )
@@ -60,7 +58,7 @@ class Arena:
             for seat in seats:
                 team_of[seat] = team
 
-        self._agents: list[Agent[RawObservation, DolphinGameCubeControllerInput]] = [
+        self._agents: list[Agent[DolphinObservation, DolphinGameCubeControllerInput]] = [
             TeamSeatAgent(team_of[seat], seat) for seat in sorted(team_of)
         ]
         self._environment = environment
@@ -74,9 +72,9 @@ class Arena:
             observation, context = environment.reset()
             terminated, truncated = Terminated(False), Truncated(False)
 
-            yield observation[1]
+            yield observation[1][0]
 
             while not (terminated or truncated):
                 actions = [agent.act(observation) for agent in self._agents]
                 observation, terminated, truncated, context = environment.step(actions)
-                yield observation[1]
+                yield observation[1][0]
