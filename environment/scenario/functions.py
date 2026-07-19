@@ -84,8 +84,6 @@ CHARACTER_POSITION_MAP: dict[Character, tuple[int, int]] = {
     "Rosalina": (5, 1),
     "Funky Kong": (5, 2),
     "Dry Bowser": (5, 3),
-    "Mii A": (6, 2),
-    "Mii B": (6, 3),
 }
 
 _VEHICLE_CHOICE_GRID: dict[VehicleSize, dict[str, tuple[tuple[Vehicle, ...], ...]]] = {

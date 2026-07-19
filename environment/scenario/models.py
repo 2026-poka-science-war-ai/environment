@@ -123,4 +123,10 @@ class RaceConfiguration(BaseModel):
             raise ValueError(
                 f"racers must contain exactly 1 or 4 racers, got {len(racers)}"
             )
+        characters = [racer.character for racer in racers]
+        repeated = sorted({c for c in characters if characters.count(c) > 1})
+        if repeated:
+            raise ValueError(
+                f"racers must pick distinct characters, got {repeated}"
+            )
         return racers
