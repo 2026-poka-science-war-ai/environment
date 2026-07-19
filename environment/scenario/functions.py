@@ -271,16 +271,16 @@ _RACES_ORDER: tuple[Races, ...] = (2, 3, 4, 5, 8, 10, 12, 16, 32)
 
 def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
     racers = configuration.racers
-    num_agents = len(racers)
+    num_racers = len(racers)
 
     _LOGGER.info(
-        "Navigating menus for num_agents=%d, course=%s",
-        num_agents,
+        "Navigating menus for num_racers=%d, course=%s",
+        num_racers,
         configuration.course,
     )
-    enter_main_menu(session, num_agents)
+    _enter_main_menu(session, num_racers)
 
-    if num_agents == 1:
+    if num_racers == 1:
         _click(session, {1: _A}, idle_frames=300)
         _click(session, {1: _DOWN}, idle_frames=10)
         _click(session, {1: _DOWN}, idle_frames=10)
@@ -305,7 +305,7 @@ def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None
     # setting rules (CC, CPU, etc.)
     _click(session, {1: _UP}, idle_frames=10)
     _click(session, {1: _A}, idle_frames=100)
-    select_rules(session, configuration)
+    _select_rules(session, configuration)
     _click(session, {1: _DOWN}, idle_frames=10)
 
     if configuration.mode == "solo":
@@ -314,10 +314,10 @@ def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None
         _click(session, {1: _DOWN}, idle_frames=10)
         _click(session, {1: _A})
 
-    select_character(session, configuration)
+    _select_character(session, configuration)
 
     if configuration.mode == "team":
-        if num_agents == 1:
+        if num_racers == 1:
             # Team select
             _click(session, {1: _A})
         else:
@@ -325,16 +325,16 @@ def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None
             _click(session, {1: _A, 2: _A, 3: _A, 4: _A})
             _click(session, {1: _A})
 
-    select_vehicle(session, configuration)
+    _select_vehicle(session, configuration)
 
-    if num_agents == 1:
+    if num_racers == 1:
         if racers[0].drift_mode == "automatic":
             _click(session, {1: _UP}, idle_frames=10)
             _click(session, {1: _A}, idle_frames=10)
         elif racers[0].drift_mode == "manual":
             _click(session, {1: _A}, idle_frames=10)
     else:
-        for player in range(1, num_agents + 1):
+        for player in range(1, num_racers + 1):
             if racers[player - 1].drift_mode == "automatic":
                 _click(session, {player: _A}, idle_frames=10)
             elif racers[player - 1].drift_mode == "manual":
@@ -342,15 +342,15 @@ def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None
                 _click(session, {player: _A}, idle_frames=10)
     _click(session, {})
 
-    select_cup(session, configuration)
+    _select_cup(session, configuration)
 
-    select_course(session, configuration)
+    _select_course(session, configuration)
 
     _click(session, {}, idle_frames=600)
 
 
-def enter_main_menu(session: Dolphin.Session, num_agents: int) -> None:
-    all_a = {player: _A for player in range(1, num_agents + 1)}
+def _enter_main_menu(session: Dolphin.Session, num_racers: int) -> None:
+    all_a = {player: _A for player in range(1, num_racers + 1)}
     _click(session, {}, idle_frames=800)
     _click(session, all_a, idle_frames=500)
 
@@ -358,13 +358,35 @@ def enter_main_menu(session: Dolphin.Session, num_agents: int) -> None:
         _click(session, all_a)
 
 
-def select_character(
+def _select_rules(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
+    rules: list[tuple[tuple[object, ...], object, int]] = [
+        (_CC_ORDER, configuration.cc, 1),
+        (_CPU_ORDER, configuration.cpu, 1),
+        (_VEHICLE_RULE_ORDER, configuration.vehicle_rule, 0),
+        (_COURSE_RULE_ORDER, configuration.course_rule, 0),
+        (_ITEM_RULE_ORDER, configuration.item_rule, 0),
+        (_RACES_ORDER, configuration.races, 2),
+    ]
+
+    for order, selected_rule, start_col in rules:
+        target_col = order.index(selected_rule)
+        col_shift = target_col - start_col
+
+        horizontal_move = _LEFT if col_shift <= 0 else _RIGHT
+        for _ in range(abs(col_shift)):
+            _click(session, {1: horizontal_move}, idle_frames=50)
+        _click(session, {1: _A}, idle_frames=50)
+
+    _click(session, {1: _A}, idle_frames=100)
+
+
+def _select_character(
     session: Dolphin.Session, configuration: RaceConfiguration
 ) -> None:
     racers = configuration.racers
-    num_agents = len(racers)
+    num_racers = len(racers)
 
-    if num_agents == 4:
+    if num_racers == 4:
         _click(session, {4: _DOWN}, idle_frames=10)
         _click(session, {4: _DOWN}, idle_frames=10)
         _click(session, {4: _DOWN}, idle_frames=10)
@@ -395,7 +417,7 @@ def select_character(
 
     selected_coordinate: list[tuple[int, int]] = []
     selected_choices: list[tuple[int, int]] = []
-    for player in range(1, num_agents + 1):
+    for player in range(1, num_racers + 1):
         coordinate = CHARACTER_POSITION_MAP[racers[player - 1].character]
         selected_coordinate.append(coordinate)
         selected_choices.append((player, coordinate[0] * 4 + coordinate[1]))
@@ -411,11 +433,11 @@ def select_character(
     _click(session, {})
 
 
-def select_vehicle(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
+def _select_vehicle(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
     racers = configuration.racers
-    num_agents = len(racers)
-    is_grid = num_agents == 1
-    for player in range(1, num_agents + 1):
+    num_racers = len(racers)
+    is_grid = num_racers == 1
+    for player in range(1, num_racers + 1):
         selected_vehicle = racers[player - 1].vehicle
 
         if is_grid:
@@ -444,7 +466,7 @@ def select_vehicle(session: Dolphin.Session, configuration: RaceConfiguration) -
                 _click(session, {player: _RIGHT}, idle_frames=10)
 
 
-def select_cup(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
+def _select_cup(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
     target_row, target_col = CUP_POSITION_MAP[COURSE_TO_CUP_MAP[configuration.course]]
 
     for _ in range(target_row):
@@ -456,31 +478,9 @@ def select_cup(session: Dolphin.Session, configuration: RaceConfiguration) -> No
     _click(session, {1: _A}, idle_frames=100)
 
 
-def select_course(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
+def _select_course(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
     target_index = COURSE_POSITION_MAP[configuration.course]
     for _ in range(target_index):
         _click(session, {1: _DOWN}, idle_frames=10)
     _click(session, {1: _A}, idle_frames=100)
     _click(session, {1: _A})
-
-
-def select_rules(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
-    rules: list[tuple[tuple[object, ...], object, int]] = [
-        (_CC_ORDER, configuration.cc, 1),
-        (_CPU_ORDER, configuration.cpu, 1),
-        (_VEHICLE_RULE_ORDER, configuration.vehicle_rule, 0),
-        (_COURSE_RULE_ORDER, configuration.course_rule, 0),
-        (_ITEM_RULE_ORDER, configuration.item_rule, 0),
-        (_RACES_ORDER, configuration.races, 2),
-    ]
-
-    for order, selected_rule, start_col in rules:
-        target_col = order.index(selected_rule)
-        col_shift = target_col - start_col
-
-        horizontal_move = _LEFT if col_shift <= 0 else _RIGHT
-        for _ in range(abs(col_shift)):
-            _click(session, {1: horizontal_move}, idle_frames=50)
-        _click(session, {1: _A}, idle_frames=50)
-
-    _click(session, {1: _A}, idle_frames=100)
