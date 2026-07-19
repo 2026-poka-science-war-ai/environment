@@ -270,8 +270,8 @@ _RACES_ORDER: tuple[Races, ...] = (2, 3, 4, 5, 8, 10, 12, 16, 32)
 
 
 def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
-    players = configuration.players
-    num_agents = len(players)
+    racers = configuration.racers
+    num_agents = len(racers)
 
     _LOGGER.info(
         "Navigating menus for num_agents=%d, course=%s",
@@ -328,16 +328,16 @@ def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None
     select_vehicle(session, configuration)
 
     if num_agents == 1:
-        if players[0].drift_mode == "automatic":
+        if racers[0].drift_mode == "automatic":
             _click(session, {1: _UP}, idle_frames=10)
             _click(session, {1: _A}, idle_frames=10)
-        elif players[0].drift_mode == "manual":
+        elif racers[0].drift_mode == "manual":
             _click(session, {1: _A}, idle_frames=10)
     else:
         for player in range(1, num_agents + 1):
-            if players[player - 1].drift_mode == "automatic":
+            if racers[player - 1].drift_mode == "automatic":
                 _click(session, {player: _A}, idle_frames=10)
-            elif players[player - 1].drift_mode == "manual":
+            elif racers[player - 1].drift_mode == "manual":
                 _click(session, {player: _DOWN}, idle_frames=10)
                 _click(session, {player: _A}, idle_frames=10)
     _click(session, {})
@@ -361,8 +361,8 @@ def enter_main_menu(session: Dolphin.Session, num_agents: int) -> None:
 def select_character(
     session: Dolphin.Session, configuration: RaceConfiguration
 ) -> None:
-    players = configuration.players
-    num_agents = len(players)
+    racers = configuration.racers
+    num_agents = len(racers)
 
     if num_agents == 4:
         _click(session, {4: _DOWN}, idle_frames=10)
@@ -396,7 +396,7 @@ def select_character(
     selected_coordinate: list[tuple[int, int]] = []
     selected_choices: list[tuple[int, int]] = []
     for player in range(1, num_agents + 1):
-        coordinate = CHARACTER_POSITION_MAP[players[player - 1].character]
+        coordinate = CHARACTER_POSITION_MAP[racers[player - 1].character]
         selected_coordinate.append(coordinate)
         selected_choices.append((player, coordinate[0] * 4 + coordinate[1]))
 
@@ -412,11 +412,11 @@ def select_character(
 
 
 def select_vehicle(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
-    players = configuration.players
-    num_agents = len(players)
+    racers = configuration.racers
+    num_agents = len(racers)
     is_grid = num_agents == 1
     for player in range(1, num_agents + 1):
-        selected_vehicle = players[player - 1].vehicle
+        selected_vehicle = racers[player - 1].vehicle
 
         if is_grid:
             target_row, target_col = VEHICLE_POSITION_MAP[selected_vehicle]
@@ -431,7 +431,7 @@ def select_vehicle(session: Dolphin.Session, configuration: RaceConfiguration) -
             _click(session, {player: _A}, idle_frames=150)
 
         else:
-            target_size = CHARACTER_SIZES[players[player - 1].character]
+            target_size = CHARACTER_SIZES[racers[player - 1].character]
             for vehicle in VEHICLE_CHOICE_QUEUE[target_size]:
                 _click(
                     session,

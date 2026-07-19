@@ -1,3 +1,5 @@
+from typing import Self
+
 from pydantic import BaseModel, field_validator, model_validator
 
 from .types import (
@@ -86,13 +88,13 @@ def _get_vehicle_size(vehicle: Vehicle) -> VehicleSize:
     return _VEHICLE_SIZES[vehicle]
 
 
-class Player(BaseModel):
+class Racer(BaseModel):
     character: Character
     vehicle: Vehicle
     drift_mode: DriftMode
 
     @model_validator(mode="after")
-    def validate_vehicle_size(self) -> "Player":
+    def validate_vehicle_size(self) -> Self:
         target_size = CHARACTER_SIZES[self.character]
         selected_vehicle_size = _get_vehicle_size(self.vehicle)
         if selected_vehicle_size != target_size:
@@ -104,7 +106,7 @@ class Player(BaseModel):
 
 
 class RaceConfiguration(BaseModel):
-    players: list[Player]
+    racers: list[Racer]
     mode: Mode
     course: Course
     cc: Cc
@@ -114,11 +116,11 @@ class RaceConfiguration(BaseModel):
     item_rule: ItemRule
     races: Races
 
-    @field_validator("players")
+    @field_validator("racers")
     @classmethod
-    def validate_players(cls, players: list[Player]) -> list[Player]:
-        if len(players) not in {1, 4}:
+    def validate_racers(cls, racers: list[Racer]) -> list[Racer]:
+        if len(racers) not in {1, 4}:
             raise ValueError(
-                f"players must contain exactly 1 or 4 players, got {len(players)}"
+                f"racers must contain exactly 1 or 4 racers, got {len(racers)}"
             )
-        return players
+        return racers
