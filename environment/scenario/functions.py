@@ -268,6 +268,8 @@ _COURSE_RULE_ORDER: tuple[CourseRule, ...] = ("choose", "random", "in order")
 _ITEM_RULE_ORDER: tuple[ItemRule, ...] = ("recommended", "frantic", "basic", "none")
 _RACES_ORDER: tuple[Races, ...] = (2, 3, 4, 5, 8, 10, 12, 16, 32)
 
+_RACE_START_ATTEMPTS = 600
+
 
 def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
     racers = configuration.racers
@@ -346,7 +348,7 @@ def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None
 
     _select_course(session, configuration)
 
-    _click(session, {}, idle_frames=600)
+    _wait_for_race(session, len(racers))
 
 
 def _enter_main_menu(session: Dolphin.Session, num_racers: int) -> None:
@@ -484,3 +486,12 @@ def _select_course(session: Dolphin.Session, configuration: RaceConfiguration) -
         _click(session, {1: _DOWN}, idle_frames=10)
     _click(session, {1: _A}, idle_frames=100)
     _click(session, {1: _A})
+
+
+def _wait_for_race(session: Dolphin.Session, num_racers: int) -> None:
+    for _ in range(_RACE_START_ATTEMPTS):
+        _click(session, {}, idle_frames=10)
+        with session.frame_buffer() as screens:
+            if len(screens) > num_racers:
+                return
+    raise TimeoutError("Timed out waiting for the race to start.")
