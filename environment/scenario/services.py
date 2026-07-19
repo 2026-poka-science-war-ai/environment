@@ -20,7 +20,7 @@ class MarioKartWiiRace(DolphinScenario):
     class Session(DolphinScenario.Session):
         def terminated(self) -> Terminated:
             _LOGGER.debug("Checking MarioKartWiiRace terminated state")
-            # TODO: implement this method to determine if the Mario Kart Wii race has terminated, e.g. by checking all the players have finished the race
+            # TODO: implement this method to determine if the Mario Kart Wii race has terminated, e.g. by checking all the racers have finished the race
             return Terminated(False)
 
         def truncated(self) -> Truncated:

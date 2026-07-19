@@ -1,20 +1,19 @@
 import logging
 from dataclasses import dataclass
-from typing import Any, Iterator, Protocol
+from typing import Any, Iterator, Protocol, Sequence
 
 from wii_arena.core.agent.protocols import Agent
 from wii_arena.core.environment.types import Terminated, Truncated
 from wii_arena.dolphin import (
+    DolphinAction,
     DolphinEnvironment,
     DolphinFrameBuffer,
     DolphinGameCubeControllerInput,
+    DolphinGameCubeControllerNoOp,
     DolphinObservation,
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-_FIRST_TEAM_SEATS = (1, 3)
-_SECOND_TEAM_SEATS = (2, 4)
 
 
 class ObservationResolver[TObs](Protocol):
@@ -26,20 +25,20 @@ class Model[TObs](Protocol):
 
 
 @dataclass(frozen=True)
-class Team[TObs]:
+class Player[TObs]:
     name: str
     resolver: ObservationResolver[TObs]
     model: Model[TObs]
 
 
-class TeamSeatAgent[TObs](Agent[DolphinObservation, DolphinGameCubeControllerInput]):
-    def __init__(self, team: Team[TObs], seat: int) -> None:
-        self._team = team
+class PlayerAgent[TObs](Agent[DolphinObservation, DolphinGameCubeControllerInput]):
+    def __init__(self, player: Player[TObs], seat: int) -> None:
+        self._player = player
         self._seat = seat
 
     def act(self, observation: DolphinObservation) -> DolphinGameCubeControllerInput:
-        return self._team.model.act(
-            self._team.resolver.resolve(observation, self._seat)
+        return self._player.model.act(
+            self._player.resolver.resolve(observation, self._seat)
         )
 
 
@@ -47,27 +46,19 @@ class Arena:
     def __init__(
         self,
         environment: DolphinEnvironment,
-        teams: tuple[Team[Any], Team[Any]],
+        players: Sequence[Player[Any]],
     ) -> None:
-        first_team, second_team = teams
-        team_of: dict[int, Team[Any]] = {}
-        for team, seats in (
-            (first_team, _FIRST_TEAM_SEATS),
-            (second_team, _SECOND_TEAM_SEATS),
-        ):
-            for seat in seats:
-                team_of[seat] = team
-
         self._agents: list[Agent[DolphinObservation, DolphinGameCubeControllerInput]] = [
-            TeamSeatAgent(team_of[seat], seat) for seat in sorted(team_of)
+            PlayerAgent(player, seat) for seat, player in enumerate(players, start=1)
         ]
         self._environment = environment
         _LOGGER.info(
             "Arena configured with seat assignment %s",
-            {seat: team.name for seat, team in team_of.items()},
+            {seat: player.name for seat, player in enumerate(players, start=1)},
         )
 
     def stream(self) -> Iterator[DolphinFrameBuffer]:
+        controller_ports = 4
         with self._environment.session() as environment:
             observation, context = environment.reset()
             terminated, truncated = Terminated(False), Truncated(False)
@@ -75,6 +66,11 @@ class Arena:
             yield observation[1][0]
 
             while not (terminated or truncated):
-                actions = [agent.act(observation) for agent in self._agents]
+                actions: DolphinAction = [
+                    agent.act(observation) for agent in self._agents
+                ]
+                actions += [DolphinGameCubeControllerNoOp()] * (
+                    controller_ports - len(actions)
+                )
                 observation, terminated, truncated, context = environment.step(actions)
                 yield observation[1][0]
