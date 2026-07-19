@@ -6,6 +6,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Iterable
 
+import PyNvVideoCodec
 from wii_arena.dlpack import DlpackDeviceType
 from wii_arena.dolphin import DolphinFrameBuffer
 
@@ -41,7 +42,19 @@ class Recorder:
         exception: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        self.close()
+        if self._process is None:
+            return
+        encoder, self._encoder = self._encoder, None
+        process, self._process = self._process, None
+        assert process.stdin is not None
+        if encoder is not None:
+            for packet in encoder.EndEncode():
+                process.stdin.write(bytes(packet["data"]))
+        process.stdin.close()
+        return_code = process.wait()
+        if return_code != 0:
+            raise RuntimeError(f"ffmpeg exited with return code {return_code}.")
+        _LOGGER.info("Saved recording to %s", self._video_file)
 
     def record(self, frames: Iterable[DolphinFrameBuffer]) -> None:
         for frame in frames:
@@ -63,21 +76,6 @@ class Recorder:
         for packet in self._encoder.Encode(_CudaFrame(pixels)):
             self._process.stdin.write(bytes(packet["data"]))
 
-    def close(self) -> None:
-        if self._process is None:
-            return
-        encoder, self._encoder = self._encoder, None
-        process, self._process = self._process, None
-        assert process.stdin is not None
-        if encoder is not None:
-            for packet in encoder.EndEncode():
-                process.stdin.write(bytes(packet["data"]))
-        process.stdin.close()
-        return_code = process.wait()
-        if return_code != 0:
-            raise RuntimeError(f"ffmpeg exited with return code {return_code}.")
-        _LOGGER.info("Saved recording to %s", self._video_file)
-
     def _create_encoder(self, frame: DolphinFrameBuffer) -> Any:
         pixel_format = _PIXEL_FORMATS.get(frame.frame_format)
         if pixel_format is None:
@@ -85,8 +83,6 @@ class Recorder:
                 f"Unsupported frame format {frame.frame_format}. "
                 f"Supported formats are {sorted(_PIXEL_FORMATS)}."
             )
-        import PyNvVideoCodec
-
         return PyNvVideoCodec.CreateEncoder(
             frame.width,
             frame.height,
@@ -142,7 +138,7 @@ def _frame_to_cuda_array(frame: DolphinFrameBuffer) -> Any:
     return cupy.ascontiguousarray(cupy.from_dlpack(frame)[:, : frame.width, :])
 
 
-_AUDIO_DUMP_DIRECTORY = "/dolphin-user/Dump/Audio"
+_AUDIO_DUMP_CONTAINER_DIRECTORY = "/dolphin-user/Dump/Audio"
 
 
 def find_audio_dumps(directory: Path) -> list[Path]:
@@ -159,7 +155,9 @@ def dolphin_audio_dump_arguments() -> list[str]:
 
 
 def audio_dump_volume(host_directory: Path) -> dict[str, dict[str, str]]:
-    return {str(host_directory): {"bind": _AUDIO_DUMP_DIRECTORY, "mode": "rw"}}
+    return {
+        str(host_directory): {"bind": _AUDIO_DUMP_CONTAINER_DIRECTORY, "mode": "rw"}
+    }
 
 
 def _pci_address(bus_id: str) -> tuple[int, int, int]:
