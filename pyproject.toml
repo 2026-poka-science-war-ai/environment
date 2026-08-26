@@ -12,6 +12,11 @@ dependencies = [
 ]
 
 [dependency-groups]
+dev = [
+    "pyright>=1.1.411",
+    "pytest>=9.1.1",
+    "ruff>=0.16.4",
+]
 nvidia-docker = ["wii-arena-dolphin-docker-nvidia"]
 nvidia-local = ["wii-arena-dolphin-local", "wii-arena-cuda-driver"]
 
@@ -22,3 +27,11 @@ wii-arena-dolphin-docker = { git = "https://github.com/betarixm/wii-arena", subd
 wii-arena-dolphin-docker-nvidia = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-dolphin-docker-nvidia", rev = "078356fa408d672a048c2831037d6a8192e67ea2" }
 wii-arena-dolphin-local = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-dolphin-local", rev = "078356fa408d672a048c2831037d6a8192e67ea2" }
 wii-arena-cuda-driver = { git = "https://github.com/betarixm/wii-arena", subdirectory = "packages/wii-arena-cuda-driver", rev = "078356fa408d672a048c2831037d6a8192e67ea2" }
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
+useLibraryCodeForTypes = true
+typeCheckingMode = "strict"
+include = ["environment", "tests", "main.py"]
