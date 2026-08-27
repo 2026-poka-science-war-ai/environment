@@ -1,10 +1,13 @@
+# pyright: reportMissingTypeStubs=false, reportUnknownMemberType=false
+# pyright: reportUnknownVariableType=false, reportUnknownArgumentType=false
 import logging
 import struct
 import subprocess
 import tempfile
+from collections.abc import Iterable
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Iterable
+from typing import Any, Self
 
 import PyNvVideoCodec
 from wii_arena.dlpack import DlpackDeviceType
@@ -33,7 +36,7 @@ class Recorder:
         self._encoder: Any | None = None
         self._process: subprocess.Popen[bytes] | None = None
 
-    def __enter__(self) -> "Recorder":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(
@@ -189,9 +192,9 @@ def _finalized_wav_copy(wav_file: Path, destination: Path) -> Path:
     if file_size < 44:
         raise RuntimeError(f"Audio dump {wav_file} is too small ({file_size} bytes).")
     data = bytearray(wav_file.read_bytes())
-    if data[0:4] != b"RIFF" or data[8:12] != b"WAVE":
+    if bytes(data[0:4]) != b"RIFF" or bytes(data[8:12]) != b"WAVE":
         raise RuntimeError(f"{wav_file} is not a RIFF/WAVE file.")
-    if data[36:40] == b"data":
+    if bytes(data[36:40]) == b"data":
         struct.pack_into("<I", data, 4, file_size - 8)
         struct.pack_into("<I", data, 40, file_size - 44)
     destination.write_bytes(data)

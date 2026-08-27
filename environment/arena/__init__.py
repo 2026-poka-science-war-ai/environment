@@ -1,6 +1,7 @@
 import logging
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
-from typing import Any, Iterator, Protocol, Sequence
+from typing import Any, Protocol
 
 from wii_arena.core.agent.protocols import Agent
 from wii_arena.core.environment.types import Terminated, Truncated
@@ -48,9 +49,9 @@ class Arena:
         environment: DolphinEnvironment,
         players: Sequence[Player[Any]],
     ) -> None:
-        self._agents: list[Agent[DolphinObservation, DolphinGameCubeControllerInput]] = [
-            PlayerAgent(player, seat) for seat, player in enumerate(players, start=1)
-        ]
+        self._agents: list[
+            Agent[DolphinObservation, DolphinGameCubeControllerInput]
+        ] = [PlayerAgent(player, seat) for seat, player in enumerate(players, start=1)]
         self._environment = environment
         _LOGGER.info(
             "Arena configured with seat assignment %s",
@@ -60,7 +61,7 @@ class Arena:
     def stream(self) -> Iterator[DolphinFrameBuffer]:
         controller_ports = 4
         with self._environment.session() as environment:
-            observation, context = environment.reset()
+            observation, _context = environment.reset()
             terminated, truncated = Terminated(False), Truncated(False)
 
             yield observation[1][0]
@@ -72,5 +73,5 @@ class Arena:
                 actions += [DolphinGameCubeControllerNoOp()] * (
                     controller_ports - len(actions)
                 )
-                observation, terminated, truncated, context = environment.step(actions)
+                observation, terminated, truncated, _context = environment.step(actions)
                 yield observation[1][0]

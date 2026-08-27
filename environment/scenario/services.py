@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Iterator
 
 from wii_arena.core.environment.types import Terminated, Truncated
 from wii_arena.dolphin import (
@@ -10,8 +10,8 @@ from wii_arena.dolphin import (
     DolphinScenario,
 )
 
-from .models import RaceConfiguration
 from .functions import navigate
+from .models import RaceConfiguration
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class MarioKartWiiRace(DolphinScenario):
         )
 
     @contextmanager
-    def session(self) -> Iterator[MarioKartWiiRace.Session]:
+    def session(self) -> Generator[MarioKartWiiRace.Session, None, None]:
         _LOGGER.info("Opening MarioKartWiiRace session")
         with self._dolphin.session() as dolphin_session:
             navigate(dolphin_session, self._configuration)
