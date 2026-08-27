@@ -10,6 +10,8 @@ from .types import GuestAddress, KartIndex, RaceCompletion, RacerCount, VsPoints
 
 _LOGGER = logging.getLogger(__name__)
 
+GAME_ID: Final[bytes] = b"RMCP01"
+
 RACE_MANAGER_POINTER: Final[GuestAddress] = GuestAddress(0x809BD730)
 
 RACE_CONFIG_POINTER: Final[GuestAddress] = GuestAddress(0x809BD728)

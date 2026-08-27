@@ -108,3 +108,12 @@ def test_a_team_picking_one_racer_for_a_cup_is_rejected(
 
     with pytest.raises(ValidationError, match="exactly 2 racers"):
         CompetitionConfiguration.model_validate(competition_document)
+
+
+def test_a_disc_image_from_another_region_is_rejected(
+    competition_document: dict[str, Any], competition_root: Path
+) -> None:
+    (competition_root / "MarioKartWii.iso").write_bytes(b"RMCE01" + b"\x00" * 1024)
+
+    with pytest.raises(ValidationError, match="RMCE01"):
+        CompetitionConfiguration.model_validate(competition_document)

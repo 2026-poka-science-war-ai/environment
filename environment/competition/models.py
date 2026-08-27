@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from ..scenario.models import Racer
 from ..scenario.types import Cup, PlayerSeat
+from ..telemetry.functions import GAME_ID
 from ..telemetry.types import VsPoints
 from .types import CupKey, TeamIdentifier, TeamName, VsSessionVerdict
 
@@ -36,6 +37,9 @@ class ModelFileNotFoundError(ValueError): ...
 
 
 class WiiIsoFileNotFoundError(ValueError): ...
+
+
+class WiiIsoRegionError(ValueError): ...
 
 
 class CupPresetsIncompleteError(ValueError): ...
@@ -147,6 +151,14 @@ class CompetitionConfiguration(BaseModel):
         if not self.wii_iso_file.is_file():
             raise WiiIsoFileNotFoundError(
                 f"the disc image {self.wii_iso_file} does not exist"
+            )
+        with self.wii_iso_file.open("rb") as disc:
+            game_id = disc.read(len(GAME_ID))
+        if game_id != GAME_ID:
+            raise WiiIsoRegionError(
+                f"the disc image {self.wii_iso_file} is "
+                f"{game_id.decode(errors='replace')!r}, but every memory address "
+                f"assumes {GAME_ID.decode()}"
             )
         for identifier, team in self.teams.items():
             for model_file in team.models:

@@ -42,7 +42,7 @@ def picked_racers(preset: str) -> Mapping[str, list[Mapping[str, str]]]:
 
 @pytest.fixture
 def competition_root(tmp_path: Path) -> Path:
-    (tmp_path / "MarioKartWii.iso").write_bytes(b"RMCP01")
+    (tmp_path / "MarioKartWii.iso").write_bytes(b"RMCP01" + b"\x00" * 1024)
     for name in ("a-first", "a-second", "b-first", "b-second"):
         (tmp_path / f"{name}.py").write_text(
             "class Model:\n"
