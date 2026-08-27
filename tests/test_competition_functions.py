@@ -3,6 +3,7 @@ from random import Random
 from typing import Any
 
 import pytest
+from wii_arena.dolphin import DolphinMemoryView, DolphinObservation
 
 from environment.competition.functions import (
     CUP_BY_KEY,
@@ -18,6 +19,7 @@ from environment.competition.functions import (
     select_seat_assignment,
 )
 from environment.competition.models import CompetitionConfiguration
+from environment.competition.services import build_seat_agents
 from environment.competition.types import SeatsByTeam
 from environment.scenario.functions import first_course_of_cup
 
@@ -173,3 +175,32 @@ def test_the_picking_team_decides_which_line_up_is_used(
         "Birdo",
     ]
     assert picked_by_a.racers != picked_by_b.racers
+
+
+def test_a_teams_models_take_its_seats_in_the_order_submitted(
+    competition_document: dict[str, Any], competition_root: Path
+) -> None:
+    for index, name in enumerate(("a-first", "a-second", "b-first", "b-second")):
+        (competition_root / f"{name}.py").write_text(
+            "from wii_arena.dolphin import DolphinGameCubeControllerInput\n"
+            "\n"
+            "\n"
+            "class Model:\n"
+            "    def __init__(self, player, team_players):\n"
+            "        pass\n"
+            "\n"
+            "    def act(self, observation):\n"
+            f"        return DolphinGameCubeControllerInput(stick_x={index / 8})\n",
+            encoding="utf-8",
+        )
+    configuration = CompetitionConfiguration.model_validate(competition_document)
+
+    agents = build_seat_agents(configuration, {"a": (2, 4), "b": (1, 3)})
+    observation: DolphinObservation = (DolphinMemoryView(memoryview(b"")), [])
+
+    assert [agents[seat].act(observation).stick_x for seat in (2, 4, 1, 3)] == [
+        pytest.approx(0.0),
+        pytest.approx(0.125),
+        pytest.approx(0.25),
+        pytest.approx(0.375),
+    ]

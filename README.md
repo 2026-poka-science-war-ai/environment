@@ -48,6 +48,7 @@ unzip ...
 uv add "environment[nvidia-local]@git+https://github.com/2026-poka-science-war-ai/environment.git"
 ```
 
+Once the dependencies are in place, describe the competition in a TOML file and run it. See **Running the Competition** below.
 
 ## Submitting a Model
 
@@ -82,6 +83,38 @@ rendered without any overlay, which is why a model is told which seat it is.
 Models are asked to act through the countdown and the race, so a rocket start is
 part of the race. The menus between races are walked by the environment, and
 models are not asked to act there.
+
+## Running the Competition
+
+The competition is described by a TOML file: which seats each team drives and
+which model file runs on each, the racer line-up for every cup under both
+picking orders, and the disc image to run.
+
+`competition.example.toml` is checked in and covers all eight cups. Each team
+lists the two models it submits, in order. Which two of the four seats a team
+drives is drawn afresh for every cup, and a team's models take its drawn seats
+in the order they are listed. Copy the example to `competition.toml` and point
+each team at its real submissions. Both `competition.toml` and everything
+under `models/` except the example are gitignored, so a real competition's
+teams and submissions never land in the repository.
+
+```bash
+cp competition.example.toml competition.toml
+CUDA_VISIBLE_DEVICES=0 uv run main.py \
+  --configuration competition.toml --video-directory recordings
+```
+
+Dolphin renders on whichever device `CUDA_VISIBLE_DEVICES` selects, because the
+frame buffers are read back through that same CUDA context.
+
+Three VS races are run, each on a randomly drawn cup, starting from that cup's
+first course so that four races in order cover the whole cup. Each recording
+starts the moment the game boots, so it covers the menu walk as well as the
+races, and carries the game's sound. Which team picks first in the opening VS
+race is drawn at random; after that the team that lost the previous VS race
+picks first. Each VS race is recorded to its own video. A VS race whose
+two teams finish level on points is replayed, unchanged, and its recording is
+replaced.
 
 ## Environment Behavior
 
