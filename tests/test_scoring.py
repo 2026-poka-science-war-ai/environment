@@ -1,5 +1,6 @@
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Literal
 
 import pytest
 
@@ -11,6 +12,7 @@ from environment.competition.models import (
 from environment.competition.services import (
     TiedSessionUnresolvedError,
     TotalPointsMetric,
+    VsPointsUnavailableError,
     decide_vs_session,
 )
 from environment.competition.types import SeatsByTeam, VsSessionVerdict
@@ -65,7 +67,11 @@ def test_a_tied_session_refuses_to_name_a_winner() -> None:
 class _RecordedAttempts:
     """Stands in for a raced session, and remembers what each attempt saw."""
 
-    def __init__(self, verdicts: Sequence[VsSessionVerdict], video_file: Path) -> None:
+    def __init__(
+        self,
+        verdicts: Sequence[VsSessionVerdict | Literal["no result"]],
+        video_file: Path,
+    ) -> None:
         self._verdicts = verdicts
         self._video_file = video_file
         self.leftover_recordings: list[bool] = []
@@ -73,7 +79,10 @@ class _RecordedAttempts:
     def __call__(self, *, attempt: int) -> VsSessionOutcome:
         self.leftover_recordings.append(self._video_file.exists())
         self._video_file.write_bytes(b"recording")
-        return _outcome(self._verdicts[attempt - 1], attempt)
+        verdict = self._verdicts[attempt - 1]
+        if verdict == "no result":
+            raise VsPointsUnavailableError("the session was truncated")
+        return _outcome(verdict, attempt)
 
 
 def test_a_replay_replaces_the_recording_of_the_attempt_it_supersedes(
@@ -102,3 +111,30 @@ def test_a_cup_that_will_not_separate_the_teams_is_a_fault(tmp_path: Path) -> No
             run_attempt=attempts,
             max_attempts=2,
         )
+
+
+def test_a_session_that_reaches_no_result_is_replayed(tmp_path: Path) -> None:
+    video_file = tmp_path / "vs-race-1.mp4"
+    attempts = _RecordedAttempts(["no result", "a"], video_file)
+
+    decided = decide_vs_session(
+        cup="Mushroom Cup", video_file=video_file, run_attempt=attempts
+    )
+
+    assert attempts.leftover_recordings == [False, False]
+    assert (decided.attempt, decided.winner) == (2, "a")
+
+
+def test_a_session_that_never_reaches_a_result_is_a_fault(tmp_path: Path) -> None:
+    video_file = tmp_path / "vs-race-1.mp4"
+    attempts = _RecordedAttempts(["no result", "no result"], video_file)
+
+    with pytest.raises(VsPointsUnavailableError):
+        decide_vs_session(
+            cup="Mushroom Cup",
+            video_file=video_file,
+            run_attempt=attempts,
+            max_attempts=2,
+        )
+
+    assert attempts.leftover_recordings == [False, False]

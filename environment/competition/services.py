@@ -295,7 +295,15 @@ def decide_vs_session(
 ) -> VsSessionOutcome:
     for attempt in range(1, max_attempts + 1):
         video_file.unlink(missing_ok=True)
-        outcome = run_attempt(attempt=attempt)
+        try:
+            outcome = run_attempt(attempt=attempt)
+        except VsPointsUnavailableError as failure:
+            if attempt == max_attempts:
+                raise VsPointsUnavailableError(
+                    f"{cup} reached no result in {max_attempts} attempts"
+                ) from failure
+            _LOGGER.warning("%s did not reach a result; replaying it", cup)
+            continue
         if outcome.scores.verdict != "tie":
             return outcome
         _LOGGER.warning(
@@ -305,7 +313,7 @@ def decide_vs_session(
         )
 
     raise TiedSessionUnresolvedError(
-        f"{cup} was still level after {max_attempts} attempts"
+        f"{cup} was not decided in {max_attempts} attempts"
     )
 
 
