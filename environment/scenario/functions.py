@@ -1,4 +1,5 @@
 import logging
+from typing import Final
 
 from wii_arena.dolphin import (
     Dolphin,
@@ -23,6 +24,15 @@ from .types import (
 
 _LOGGER = logging.getLogger(__name__)
 
+CURSOR_NUDGE_FRAMES: Final[int] = 45
+RULE_SETTLE_FRAMES: Final[int] = 80
+PAGE_TRANSITION_FRAMES: Final[int] = 180
+SELECTION_CONFIRM_FRAMES: Final[int] = 220
+MODE_ENTRY_FRAMES: Final[int] = 400
+BOOT_SETTLE_FRAMES: Final[int] = 900
+BOOT_CONFIRM_FRAMES: Final[int] = 600
+DEFAULT_IDLE_FRAMES: Final[int] = 300
+
 _A = DolphinGameCubeControllerInput(a=True)
 _UP = DolphinGameCubeControllerInput(up=True)
 _DOWN = DolphinGameCubeControllerInput(down=True)
@@ -38,12 +48,11 @@ def _to_action(inputs: dict[int, DolphinGameCubeControllerInput]) -> DolphinActi
         inputs.get(4, DolphinGameCubeControllerNoOp()),
     ]
 
-
 def _click(
     session: Dolphin.Session,
     inputs: dict[int, DolphinGameCubeControllerInput],
     *,
-    idle_frames: int = 250,
+    idle_frames: int = DEFAULT_IDLE_FRAMES,
     press_frames: int = 3,
 ) -> None:
     action = _to_action(inputs)
@@ -300,31 +309,31 @@ def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None
     _enter_main_menu(session, num_racers)
 
     for _ in range(num_racers - 1):
-        _click(session, {1: _RIGHT}, idle_frames=10)
-    _click(session, {1: _A}, idle_frames=300)
+        _click(session, {1: _RIGHT}, idle_frames=CURSOR_NUDGE_FRAMES)
+    _click(session, {1: _A}, idle_frames=MODE_ENTRY_FRAMES)
 
     if num_racers == 1:
         menu = _SINGLE_PLAYER_MENU
     else:
         menu = _MULTIPLAYER_MENU
         for player in range(2, num_racers + 1):
-            _click(session, {player: _A}, idle_frames=10)
-        _click(session, {}, idle_frames=50)
-        _click(session, {1: _A}, idle_frames=100)
+            _click(session, {player: _A}, idle_frames=CURSOR_NUDGE_FRAMES)
+        _click(session, {}, idle_frames=RULE_SETTLE_FRAMES)
+        _click(session, {1: _A}, idle_frames=PAGE_TRANSITION_FRAMES)
 
     for _ in range(menu.index("VS Race")):
-        _click(session, {1: _DOWN}, idle_frames=10)
-    _click(session, {1: _A}, idle_frames=100)
+        _click(session, {1: _DOWN}, idle_frames=CURSOR_NUDGE_FRAMES)
+    _click(session, {1: _A}, idle_frames=PAGE_TRANSITION_FRAMES)
 
-    _click(session, {1: _UP}, idle_frames=10)
-    _click(session, {1: _A}, idle_frames=100)
+    _click(session, {1: _UP}, idle_frames=CURSOR_NUDGE_FRAMES)
+    _click(session, {1: _A}, idle_frames=PAGE_TRANSITION_FRAMES)
     _select_rules(session, configuration)
-    _click(session, {1: _DOWN}, idle_frames=10)
+    _click(session, {1: _DOWN}, idle_frames=CURSOR_NUDGE_FRAMES)
 
     if configuration.mode == "solo":
         _click(session, {1: _A})
     elif configuration.mode == "team":
-        _click(session, {1: _DOWN}, idle_frames=10)
+        _click(session, {1: _DOWN}, idle_frames=CURSOR_NUDGE_FRAMES)
         _click(session, {1: _A})
 
     _select_character(session, configuration)
@@ -338,17 +347,17 @@ def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None
 
     if num_racers == 1:
         if racers[0].drift_mode == "automatic":
-            _click(session, {1: _UP}, idle_frames=10)
-            _click(session, {1: _A}, idle_frames=10)
+            _click(session, {1: _UP}, idle_frames=CURSOR_NUDGE_FRAMES)
+            _click(session, {1: _A}, idle_frames=CURSOR_NUDGE_FRAMES)
         elif racers[0].drift_mode == "manual":
-            _click(session, {1: _A}, idle_frames=10)
+            _click(session, {1: _A}, idle_frames=CURSOR_NUDGE_FRAMES)
     else:
         for player in range(1, num_racers + 1):
             if racers[player - 1].drift_mode == "automatic":
-                _click(session, {player: _A}, idle_frames=10)
+                _click(session, {player: _A}, idle_frames=CURSOR_NUDGE_FRAMES)
             elif racers[player - 1].drift_mode == "manual":
-                _click(session, {player: _DOWN}, idle_frames=10)
-                _click(session, {player: _A}, idle_frames=10)
+                _click(session, {player: _DOWN}, idle_frames=CURSOR_NUDGE_FRAMES)
+                _click(session, {player: _A}, idle_frames=CURSOR_NUDGE_FRAMES)
     _click(session, {})
 
     _select_cup(session, configuration)
@@ -360,8 +369,8 @@ def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None
 
 def _enter_main_menu(session: Dolphin.Session, num_racers: int) -> None:
     all_a = {player: _A for player in range(1, num_racers + 1)}
-    _click(session, {}, idle_frames=800)
-    _click(session, all_a, idle_frames=500)
+    _click(session, {}, idle_frames=BOOT_SETTLE_FRAMES)
+    _click(session, all_a, idle_frames=BOOT_CONFIRM_FRAMES)
 
     for _ in range(7):
         _click(session, all_a)
@@ -383,10 +392,10 @@ def _select_rules(session: Dolphin.Session, configuration: RaceConfiguration) ->
 
         horizontal_move = _LEFT if col_shift <= 0 else _RIGHT
         for _ in range(abs(col_shift)):
-            _click(session, {1: horizontal_move}, idle_frames=50)
-        _click(session, {1: _A}, idle_frames=50)
+            _click(session, {1: horizontal_move}, idle_frames=RULE_SETTLE_FRAMES)
+        _click(session, {1: _A}, idle_frames=RULE_SETTLE_FRAMES)
 
-    _click(session, {1: _A}, idle_frames=100)
+    _click(session, {1: _A}, idle_frames=PAGE_TRANSITION_FRAMES)
 
 
 def _select_character(
@@ -398,9 +407,9 @@ def _select_character(
     for player in reversed(range(1, num_racers + 1)):
         row, column = CHARACTER_POSITION_MAP[_CHARACTER_DEFAULTS[player]]
         for _ in range(_SHARED_COLUMN - column):
-            _click(session, {player: _RIGHT}, idle_frames=10)
+            _click(session, {player: _RIGHT}, idle_frames=CURSOR_NUDGE_FRAMES)
         for _ in range(_SHARED_ROW - row):
-            _click(session, {player: _DOWN}, idle_frames=10)
+            _click(session, {player: _DOWN}, idle_frames=CURSOR_NUDGE_FRAMES)
 
     for player in sorted(
         range(1, num_racers + 1),
@@ -408,10 +417,10 @@ def _select_character(
     ):
         row, column = CHARACTER_POSITION_MAP[racers[player - 1].character]
         for _ in range(_SHARED_ROW - row):
-            _click(session, {player: _UP}, idle_frames=10)
+            _click(session, {player: _UP}, idle_frames=CURSOR_NUDGE_FRAMES)
         for _ in range(_SHARED_COLUMN - column):
-            _click(session, {player: _LEFT}, idle_frames=10)
-        _click(session, {player: _A}, idle_frames=10)
+            _click(session, {player: _LEFT}, idle_frames=CURSOR_NUDGE_FRAMES)
+        _click(session, {player: _A}, idle_frames=CURSOR_NUDGE_FRAMES)
 
     _click(session, {})
 
@@ -428,12 +437,16 @@ def _select_vehicle(session: Dolphin.Session, configuration: RaceConfiguration) 
 
             vertical_move = _UP if target_row <= 0 else _DOWN
             for _ in range(abs(target_row)):
-                _click(session, {player: vertical_move}, idle_frames=10)
+                _click(
+                    session, {player: vertical_move}, idle_frames=CURSOR_NUDGE_FRAMES
+                )
 
             horizontal_move = _LEFT if target_col <= 0 else _RIGHT
             for _ in range(abs(target_col)):
-                _click(session, {player: horizontal_move}, idle_frames=10)
-            _click(session, {player: _A}, idle_frames=150)
+                _click(
+                    session, {player: horizontal_move}, idle_frames=CURSOR_NUDGE_FRAMES
+                )
+            _click(session, {player: _A}, idle_frames=SELECTION_CONFIRM_FRAMES)
 
         else:
             target_size = CHARACTER_SIZES[racers[player - 1].character]
@@ -441,37 +454,37 @@ def _select_vehicle(session: Dolphin.Session, configuration: RaceConfiguration) 
                 _click(
                     session,
                     {player: DolphinGameCubeControllerInput()},
-                    idle_frames=10,
+                    idle_frames=CURSOR_NUDGE_FRAMES,
                 )
                 if vehicle == selected_vehicle:
-                    _click(session, {player: _A}, idle_frames=150)
+                    _click(session, {player: _A}, idle_frames=SELECTION_CONFIRM_FRAMES)
                     break
-                _click(session, {player: _RIGHT}, idle_frames=10)
+                _click(session, {player: _RIGHT}, idle_frames=CURSOR_NUDGE_FRAMES)
 
 
 def _select_cup(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
     target_row, target_col = CUP_POSITION_MAP[COURSE_TO_CUP_MAP[configuration.course]]
 
     for _ in range(target_row):
-        _click(session, {1: _DOWN}, idle_frames=10)
+        _click(session, {1: _DOWN}, idle_frames=CURSOR_NUDGE_FRAMES)
 
     for _ in range(target_col):
-        _click(session, {1: _RIGHT}, idle_frames=10)
+        _click(session, {1: _RIGHT}, idle_frames=CURSOR_NUDGE_FRAMES)
 
-    _click(session, {1: _A}, idle_frames=100)
+    _click(session, {1: _A}, idle_frames=PAGE_TRANSITION_FRAMES)
 
 
 def _select_course(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
     target_index = COURSE_POSITION_MAP[configuration.course]
     for _ in range(target_index):
-        _click(session, {1: _DOWN}, idle_frames=10)
-    _click(session, {1: _A}, idle_frames=100)
+        _click(session, {1: _DOWN}, idle_frames=CURSOR_NUDGE_FRAMES)
+    _click(session, {1: _A}, idle_frames=PAGE_TRANSITION_FRAMES)
     _click(session, {1: _A})
 
 
 def _wait_for_race(session: Dolphin.Session, num_racers: int) -> None:
     for _ in range(_RACE_START_ATTEMPTS):
-        _click(session, {}, idle_frames=10)
+        _click(session, {}, idle_frames=CURSOR_NUDGE_FRAMES)
         with session.frame_buffer() as screens:
             if len(screens) > num_racers:
                 return
