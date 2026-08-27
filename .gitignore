@@ -174,3 +174,17 @@ poetry.toml
 pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+
+### Project ###
+# Recordings: gigabytes of gameplay video per session.
+recordings/
+
+# The Wii disc image the environment runs. Not ours to distribute.
+*.iso
+
+# The competition as actually run. Copy competition.example.toml to make it.
+competition.toml
+
+# Submitted models. Only the example is checked in.
+models/*.py
+!models/example-model.py

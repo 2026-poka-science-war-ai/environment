@@ -8,7 +8,7 @@ The Official AI Competition Environment for the 2026 KAIST–POSTECH Science War
 
 ## Overview
 
-Participants implement an `Agent` that follows `wii_arena.core.agent.protocols.Agent`. The submitted agent will compete across multiple scenarios.
+Participants submit a model, one Python file per seat, which competes across multiple scenarios.
 
 The goal of this environment is to provide a standardized interface for participants to develop and test their AI agents.
 Providing a trainable environment to participants is not a goal.
@@ -30,41 +30,6 @@ apt install ffmpeg
 uv add "environment[nvidia-docker]@git+https://github.com/2026-poka-science-war-ai/environment.git"
 ```
 
-```python
-from pathlib import Path
-
-import docker
-from wii_arena.dolphin import DolphinEnvironment
-from wii_arena.dolphin_docker_nvidia import NvidiaDockerDolphin
-
-from environment.arena import Arena, Player
-from environment.record import Recorder
-from environment.scenario.models import RaceConfiguration
-from environment.scenario.services import MarioKartWiiRace
-
-DOCKER_IMAGE = docker.from_env().images.get("ghcr.io/betarixm/wii-arena-dolphin:latest")
-ISO_FILE: Path = ...
-VIDEO_FILE: Path = ...
-CONFIGURATION: RaceConfiguration = ...
-PLAYERS: list[Player] = ...
-
-assert len(PLAYERS) == len(CONFIGURATION.racers)
-
-with Recorder(video_file=VIDEO_FILE) as recorder:
-    recorder.record(
-        Arena(
-            environment=DolphinEnvironment(
-                scenario=MarioKartWiiRace(
-                    configuration=CONFIGURATION,
-                    dolphin=NvidiaDockerDolphin(
-                        docker_image=DOCKER_IMAGE, wii_iso_file=ISO_FILE
-                    ),
-                )
-            ),
-            players=PLAYERS,
-        ).stream()
-    )
-```
 
 ### Local Environment with NVIDIA Support
 
@@ -83,40 +48,40 @@ unzip ...
 uv add "environment[nvidia-local]@git+https://github.com/2026-poka-science-war-ai/environment.git"
 ```
 
+
+## Submitting a Model
+
+A submission is a single Python file exposing a class named `Model`. It is
+constructed with the seat it drives and the seats its whole team drives, and is
+asked for one controller input per frame while a race is live.
+
 ```python
-from wii_arena.cuda_driver import CudaDriver
-from wii_arena.dolphin import DolphinEnvironment
-from wii_arena.dolphin_local import LocalDolphin
+from wii_arena.dolphin import DolphinGameCubeControllerInput, DolphinObservation
 
-from environment.arena import Arena, Player
-from environment.record import Recorder
-from environment.scenario.models import RaceConfiguration
-from environment.scenario.services import MarioKartWiiRace
+from environment.scenario.types import PlayerSeat
 
-CONFIGURATION: RaceConfiguration = ...
-PLAYERS: list[Player] = ...
 
-assert len(PLAYERS) == len(CONFIGURATION.racers)
+class Model:
+    def __init__(self, player: PlayerSeat, team_players: list[PlayerSeat]) -> None:
+        self._player = player
+        self._team_players = team_players
 
-with Recorder(video_file=VIDEO_FILE) as recorder:
-    recorder.record(
-        Arena(
-            environment=DolphinEnvironment(
-                scenario=MarioKartWiiRace(
-                    configuration=CONFIGURATION,
-                    dolphin=LocalDolphin(
-                        executable_path=DOLPHIN_EXECUTABLE,
-                        vulcan_layer_path=VULKAN_LAYER_LIBRARY,
-                        vulkan_layer_configuration_path=VULKAN_LAYER_CONFIG,
-                        wii_iso_file=ISO_FILE,
-                        driver=CudaDriver(),
-                    ),
-                )
-            ),
-            players=PLAYERS,
-        ).stream()
-    )
+    def act(self, observation: DolphinObservation) -> DolphinGameCubeControllerInput:
+        memory, screens = observation
+        own_view = screens[self._player]
+        return DolphinGameCubeControllerInput(a=True)
 ```
+
+`PlayerSeat` is `Literal[1, 2, 3, 4]`, so a seat that is not one of the four
+controller ports is a type error rather than a runtime surprise.
+
+`screens[0]` is the composited split screen with the on-screen overlay drawn
+on it. `screens[1]` through `screens[4]` are the four seats' own views,
+rendered without any overlay, which is why a model is told which seat it is.
+
+Models are asked to act through the countdown and the race, so a rocket start is
+part of the race. The menus between races are walked by the environment, and
+models are not asked to act there.
 
 ## Environment Behavior
 
