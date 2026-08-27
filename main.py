@@ -1,4 +1,4 @@
-"""Runs the competition: three VS races, each recorded to its own video."""
+"""Runs the competition: up to three VS races, each recorded to its own video."""
 
 import argparse
 import logging
@@ -78,7 +78,7 @@ def parse_arguments() -> argparse.Namespace:
         "--video-directory",
         type=Path,
         default=Path("recordings"),
-        help="where the three recordings are written",
+        help="where the recordings are written",
     )
     parser.add_argument(
         "--internal-resolution",

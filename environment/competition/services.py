@@ -33,6 +33,7 @@ from .functions import (
     select_cups,
     select_opening_team,
     select_seat_assignment,
+    series_is_decided,
 )
 from .models import (
     SEATS_IN_ORDER,
@@ -344,5 +345,13 @@ def run_competition(
         )
         sessions.append(outcome)
         winners.append(outcome.winner)
+        if series_is_decided(winners) and len(sessions) < len(cups):
+            _LOGGER.info(
+                "%s has taken the series %d-%d, so the remaining VS races are not run",
+                configuration.team(outcome.winner).name,
+                winners.count(outcome.winner),
+                len(winners) - winners.count(outcome.winner),
+            )
+            break
 
     return CompetitionOutcome(sessions=sessions)

@@ -36,6 +36,8 @@ COMPETITION_ITEM_RULE: Final[ItemRule] = "recommended"
 COMPETITION_RACES: Final[Races] = 4
 COMPETITION_SESSION_COUNT: Final[int] = 3
 
+SESSIONS_TO_WIN: Final[int] = COMPETITION_SESSION_COUNT // 2 + 1
+
 MODEL_CLASS_NAME: Final[str] = "Model"
 
 CUP_BY_KEY: Final[Mapping[CupKey, Cup]] = {
@@ -212,3 +214,10 @@ def load_model(
         model_file,
     )
     return built
+
+
+def series_is_decided(decided_winners: Sequence[TeamIdentifier]) -> bool:
+    return any(
+        decided_winners.count(identifier) >= SESSIONS_TO_WIN
+        for identifier in TEAM_IDENTIFIERS
+    )
