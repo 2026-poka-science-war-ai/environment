@@ -8,6 +8,7 @@ from wii_arena.dolphin import (
     DolphinGameCubeControllerNoOp,
 )
 
+from ..telemetry.types import KartIndex, RacerCount
 from .models import CHARACTER_SIZES, RaceConfiguration
 from .types import (
     Cc,
@@ -15,7 +16,9 @@ from .types import (
     Course,
     CourseRule,
     Cpu,
+    Cup,
     ItemRule,
+    PlayerSeat,
     Races,
     Vehicle,
     VehicleRule,
@@ -47,6 +50,7 @@ def _to_action(inputs: dict[int, DolphinGameCubeControllerInput]) -> DolphinActi
         inputs.get(3, DolphinGameCubeControllerNoOp()),
         inputs.get(4, DolphinGameCubeControllerNoOp()),
     ]
+
 
 def _click(
     session: Dolphin.Session,
@@ -206,7 +210,7 @@ def _build_vehicle_position_map() -> dict[Vehicle, tuple[int, int]]:
 
 VEHICLE_POSITION_MAP: dict[Vehicle, tuple[int, int]] = _build_vehicle_position_map()
 
-CUP_POSITION_MAP: dict[str, tuple[int, int]] = {
+CUP_POSITION_MAP: dict[Cup, tuple[int, int]] = {
     "Mushroom Cup": (0, 0),
     "Flower Cup": (0, 1),
     "Star Cup": (0, 2),
@@ -252,7 +256,7 @@ COURSE_POSITION_MAP: dict[Course, int] = {
     "N64 Bowser's Castle": 3,
 }
 
-COURSE_TO_CUP_MAP: dict[Course, str] = {
+COURSE_TO_CUP_MAP: dict[Course, Cup] = {
     "Luigi Circuit": "Mushroom Cup",
     "Moo Moo Meadows": "Mushroom Cup",
     "Mushroom Gorge": "Mushroom Cup",
@@ -287,6 +291,24 @@ COURSE_TO_CUP_MAP: dict[Course, str] = {
     "N64 Bowser's Castle": "Lightning Cup",
 }
 
+
+def kart_of_seat(seat: PlayerSeat) -> KartIndex:
+    return KartIndex(seat - 1)
+
+
+def racer_count_of(configuration: RaceConfiguration) -> RacerCount:
+    if configuration.cpu == "off":
+        return RacerCount(len(configuration.racers))
+    return RacerCount(VS_RACE_GRID_SIZE)
+
+
+def first_course_of_cup(cup: Cup) -> Course:
+    for course, course_cup in COURSE_TO_CUP_MAP.items():
+        if course_cup == cup and COURSE_POSITION_MAP[course] == 0:
+            return course
+    raise ValueError(f"{cup} has no course at the first grid position.")
+
+
 _CC_ORDER: tuple[Cc, ...] = (50, 100, 150, "mirror")
 _CPU_ORDER: tuple[Cpu, ...] = ("easy", "normal", "hard", "off")
 _VEHICLE_RULE_ORDER: tuple[VehicleRule, ...] = ("all", "karts", "bikes")
@@ -295,6 +317,7 @@ _ITEM_RULE_ORDER: tuple[ItemRule, ...] = ("recommended", "frantic", "basic", "no
 _RACES_ORDER: tuple[Races, ...] = (2, 3, 4, 5, 8, 10, 12, 16, 32)
 
 _RACE_START_ATTEMPTS = 600
+VS_RACE_GRID_SIZE: Final[int] = 12
 
 
 def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None:

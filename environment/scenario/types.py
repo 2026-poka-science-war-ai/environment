@@ -101,6 +101,19 @@ Course = Literal[
     "N64 Bowser's Castle",
 ]
 
+Cup = Literal[
+    "Mushroom Cup",
+    "Flower Cup",
+    "Star Cup",
+    "Special Cup",
+    "Shell Cup",
+    "Banana Cup",
+    "Leaf Cup",
+    "Lightning Cup",
+]
+
+PlayerSeat = Literal[1, 2, 3, 4]
+
 Cc = Literal[50, 100, 150, "mirror"]
 Cpu = Literal["easy", "normal", "hard", "off"]
 VehicleRule = Literal["all", "karts", "bikes"]
