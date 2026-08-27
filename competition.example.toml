@@ -1,0 +1,184 @@
+# Copy this to competition.toml and fill in the teams, models, and picks.
+#
+# Each team submits two models and picks two racers per cup, both in order.
+# Which two seats a team drives is drawn afresh for every cup, and the team's
+# models and picks take those seats in the order they are listed.
+
+wii_iso_file = "MarioKartWii.iso"
+
+[teams.a]
+name = "KAIST"
+models = ["models/example-model.py", "models/example-model.py"]
+
+[teams.b]
+name = "POSTECH"
+models = ["models/example-model.py", "models/example-model.py"]
+
+# --- Mushroom Cup ----------------------------------------
+[cups.mushroom_cup.team_a_first]
+a = [
+  { character = "Mario", vehicle = "Standard Kart M", drift_mode = "manual" },
+  { character = "Luigi", vehicle = "Mach Bike", drift_mode = "automatic" },
+]
+b = [
+  { character = "Peach", vehicle = "Wild Wing", drift_mode = "manual" },
+  { character = "Daisy", vehicle = "Nitrocycle", drift_mode = "automatic" },
+]
+
+[cups.mushroom_cup.team_b_first]
+a = [
+  { character = "Yoshi", vehicle = "Bon Bon", drift_mode = "manual" },
+  { character = "Birdo", vehicle = "Turbo Blooper", drift_mode = "automatic" },
+]
+b = [
+  { character = "Toad", vehicle = "Standard Kart S", drift_mode = "manual" },
+  { character = "Toadette", vehicle = "Magikruiser", drift_mode = "automatic" },
+]
+
+# --- Flower Cup ------------------------------------------
+[cups.flower_cup.team_a_first]
+a = [
+  { character = "Koopa Troopa", vehicle = "Blue Falcon", drift_mode = "manual" },
+  { character = "Dry Bones", vehicle = "Bullet Bike", drift_mode = "automatic" },
+]
+b = [
+  { character = "Baby Mario", vehicle = "Baby Booster", drift_mode = "manual" },
+  { character = "Baby Luigi", vehicle = "Rally Romper", drift_mode = "automatic" },
+]
+
+[cups.flower_cup.team_b_first]
+a = [
+  { character = "Bowser", vehicle = "Flame Flyer", drift_mode = "manual" },
+  { character = "Waluigi", vehicle = "Wario Bike", drift_mode = "automatic" },
+]
+b = [
+  { character = "Funky Kong", vehicle = "Bowser Bike", drift_mode = "manual" },
+  { character = "Rosalina", vehicle = "Aero Glider", drift_mode = "automatic" },
+]
+
+# --- Star Cup --------------------------------------------
+[cups.star_cup.team_a_first]
+a = [
+  { character = "Mario", vehicle = "Standard Kart M", drift_mode = "manual" },
+  { character = "Luigi", vehicle = "Mach Bike", drift_mode = "automatic" },
+]
+b = [
+  { character = "Peach", vehicle = "Wild Wing", drift_mode = "manual" },
+  { character = "Daisy", vehicle = "Nitrocycle", drift_mode = "automatic" },
+]
+
+[cups.star_cup.team_b_first]
+a = [
+  { character = "Yoshi", vehicle = "Bon Bon", drift_mode = "manual" },
+  { character = "Birdo", vehicle = "Turbo Blooper", drift_mode = "automatic" },
+]
+b = [
+  { character = "Toad", vehicle = "Standard Kart S", drift_mode = "manual" },
+  { character = "Toadette", vehicle = "Magikruiser", drift_mode = "automatic" },
+]
+
+# --- Special Cup -----------------------------------------
+[cups.special_cup.team_a_first]
+a = [
+  { character = "Koopa Troopa", vehicle = "Blue Falcon", drift_mode = "manual" },
+  { character = "Dry Bones", vehicle = "Bullet Bike", drift_mode = "automatic" },
+]
+b = [
+  { character = "Baby Mario", vehicle = "Baby Booster", drift_mode = "manual" },
+  { character = "Baby Luigi", vehicle = "Rally Romper", drift_mode = "automatic" },
+]
+
+[cups.special_cup.team_b_first]
+a = [
+  { character = "Bowser", vehicle = "Flame Flyer", drift_mode = "manual" },
+  { character = "Waluigi", vehicle = "Wario Bike", drift_mode = "automatic" },
+]
+b = [
+  { character = "Funky Kong", vehicle = "Bowser Bike", drift_mode = "manual" },
+  { character = "Rosalina", vehicle = "Aero Glider", drift_mode = "automatic" },
+]
+
+# --- Shell Cup -------------------------------------------
+[cups.shell_cup.team_a_first]
+a = [
+  { character = "Mario", vehicle = "Standard Kart M", drift_mode = "manual" },
+  { character = "Luigi", vehicle = "Mach Bike", drift_mode = "automatic" },
+]
+b = [
+  { character = "Peach", vehicle = "Wild Wing", drift_mode = "manual" },
+  { character = "Daisy", vehicle = "Nitrocycle", drift_mode = "automatic" },
+]
+
+[cups.shell_cup.team_b_first]
+a = [
+  { character = "Yoshi", vehicle = "Bon Bon", drift_mode = "manual" },
+  { character = "Birdo", vehicle = "Turbo Blooper", drift_mode = "automatic" },
+]
+b = [
+  { character = "Toad", vehicle = "Standard Kart S", drift_mode = "manual" },
+  { character = "Toadette", vehicle = "Magikruiser", drift_mode = "automatic" },
+]
+
+# --- Banana Cup ------------------------------------------
+[cups.banana_cup.team_a_first]
+a = [
+  { character = "Koopa Troopa", vehicle = "Blue Falcon", drift_mode = "manual" },
+  { character = "Dry Bones", vehicle = "Bullet Bike", drift_mode = "automatic" },
+]
+b = [
+  { character = "Baby Mario", vehicle = "Baby Booster", drift_mode = "manual" },
+  { character = "Baby Luigi", vehicle = "Rally Romper", drift_mode = "automatic" },
+]
+
+[cups.banana_cup.team_b_first]
+a = [
+  { character = "Bowser", vehicle = "Flame Flyer", drift_mode = "manual" },
+  { character = "Waluigi", vehicle = "Wario Bike", drift_mode = "automatic" },
+]
+b = [
+  { character = "Funky Kong", vehicle = "Bowser Bike", drift_mode = "manual" },
+  { character = "Rosalina", vehicle = "Aero Glider", drift_mode = "automatic" },
+]
+
+# --- Leaf Cup --------------------------------------------
+[cups.leaf_cup.team_a_first]
+a = [
+  { character = "Mario", vehicle = "Standard Kart M", drift_mode = "manual" },
+  { character = "Luigi", vehicle = "Mach Bike", drift_mode = "automatic" },
+]
+b = [
+  { character = "Peach", vehicle = "Wild Wing", drift_mode = "manual" },
+  { character = "Daisy", vehicle = "Nitrocycle", drift_mode = "automatic" },
+]
+
+[cups.leaf_cup.team_b_first]
+a = [
+  { character = "Yoshi", vehicle = "Bon Bon", drift_mode = "manual" },
+  { character = "Birdo", vehicle = "Turbo Blooper", drift_mode = "automatic" },
+]
+b = [
+  { character = "Toad", vehicle = "Standard Kart S", drift_mode = "manual" },
+  { character = "Toadette", vehicle = "Magikruiser", drift_mode = "automatic" },
+]
+
+# --- Lightning Cup ---------------------------------------
+[cups.lightning_cup.team_a_first]
+a = [
+  { character = "Koopa Troopa", vehicle = "Blue Falcon", drift_mode = "manual" },
+  { character = "Dry Bones", vehicle = "Bullet Bike", drift_mode = "automatic" },
+]
+b = [
+  { character = "Baby Mario", vehicle = "Baby Booster", drift_mode = "manual" },
+  { character = "Baby Luigi", vehicle = "Rally Romper", drift_mode = "automatic" },
+]
+
+[cups.lightning_cup.team_b_first]
+a = [
+  { character = "Bowser", vehicle = "Flame Flyer", drift_mode = "manual" },
+  { character = "Waluigi", vehicle = "Wario Bike", drift_mode = "automatic" },
+]
+b = [
+  { character = "Funky Kong", vehicle = "Bowser Bike", drift_mode = "manual" },
+  { character = "Rosalina", vehicle = "Aero Glider", drift_mode = "automatic" },
+]
+
