@@ -18,9 +18,9 @@ from wii_arena.dolphin import (
     DolphinScenario,
 )
 
-from ..telemetry.functions import read_race_progress, read_race_stage
-from ..telemetry.models import RaceProgress
-from ..telemetry.services import GuestMemory
+from ..telemetry.functions import read_menu_state, read_race_progress, read_race_stage
+from ..telemetry.models import MenuState, RaceProgress
+from ..telemetry.services import GuestMemory, GuestMemoryAddressError
 from ..telemetry.types import RacerCount
 from .functions import navigate, racer_count_of
 from .models import RaceConfiguration
@@ -79,9 +79,23 @@ class _ObservedDolphinSession(Dolphin.Session):
     def __init__(self, session: Dolphin.Session, observe: FrameObserver) -> None:
         self._session = session
         self._observe = observe
+        self._frame = 0
+        self._last_menu: MenuState | None = None
+
+    def _log_menu_change(self) -> None:
+        try:
+            state = read_menu_state(GuestMemory(self._session.memory_view()))
+        except GuestMemoryAddressError:
+            return
+        if state == self._last_menu:
+            return
+        self._last_menu = state
+        _LOGGER.info("Menu frame %d: %s", self._frame, state)
 
     def execute(self, action: DolphinAction) -> None:
         self._session.execute(action)
+        self._frame += 1
+        self._log_menu_change()
         try:
             with self._session.frame_buffer() as screens:
                 self._observe(screens[0])

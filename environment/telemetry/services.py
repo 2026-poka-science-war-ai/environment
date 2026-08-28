@@ -48,5 +48,8 @@ class GuestMemory:
     def u32(self, address: GuestAddress) -> int:
         return struct.unpack_from(">I", self._view, self._offset(address, 4))[0]
 
+    def s32(self, address: GuestAddress) -> int:
+        return struct.unpack_from(">i", self._view, self._offset(address, 4))[0]
+
     def f32(self, address: GuestAddress) -> float:
         return struct.unpack_from(">f", self._view, self._offset(address, 4))[0]

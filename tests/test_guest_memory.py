@@ -4,7 +4,7 @@ from collections.abc import Sequence
 import pytest
 from wii_arena.dolphin import DolphinMemoryView
 
-from environment.telemetry.functions import read_vs_points
+from environment.telemetry.functions import read_menu_state, read_vs_points
 from environment.telemetry.services import (
     MEM1_START,
     MEM2_START,
@@ -96,3 +96,47 @@ def test_points_are_absent_while_no_race_configuration_is_loaded() -> None:
     memory = GuestMemory(DolphinMemoryView(memoryview(bytearray(_VIEW_SIZE))))
 
     assert read_vs_points(memory, RacerCount(12)) is None
+
+
+def _menu_memory(*, page_count: int, page_id: int, page_state: int) -> GuestMemory:
+    raw = bytearray(_VIEW_SIZE)
+
+    def put_u32(address: GuestAddress, value: int) -> None:
+        struct.pack_into(">I", raw, _view_offset(address), value & 0xFFFFFFFF)
+
+    manager = GuestAddress(0x80620000)
+    section = GuestAddress(0x80630000)
+    page = GuestAddress(0x80640000)
+    decoy = GuestAddress(0x80650000)
+
+    put_u32(GuestAddress(0x809C1E38), manager)
+    put_u32(manager, section)
+    put_u32(GuestAddress(manager + 0x30), 0)
+    put_u32(GuestAddress(decoy + 0x04), 0x01)
+    put_u32(GuestAddress(decoy + 0x08), 0x01)
+    for slot in range(10):
+        put_u32(GuestAddress(section + 0x354 + 4 * slot), decoy)
+    put_u32(GuestAddress(section + 0x380), decoy)
+    if 1 <= page_count <= 10:
+        put_u32(GuestAddress(section + 0x354 + 4 * (page_count - 1)), page)
+    put_u32(GuestAddress(section + 0x37C), page_count)
+    put_u32(GuestAddress(page + 0x04), page_id)
+    put_u32(GuestAddress(page + 0x08), page_state)
+    return GuestMemory(DolphinMemoryView(memoryview(raw)))
+
+
+def test_the_focused_page_is_the_last_one_on_the_section() -> None:
+    state = read_menu_state(_menu_memory(page_count=3, page_id=0x6E, page_state=4))
+
+    assert state is not None
+    assert (state.page_id, state.page_state, state.page_count) == (0x6E, 4, 3)
+    assert state.section_lifecycle_state == 0
+
+
+@pytest.mark.parametrize("page_count", [0, -1, 11, 12])
+def test_a_page_count_outside_the_section_array_has_no_menu_state(
+    page_count: int,
+) -> None:
+    memory = _menu_memory(page_count=page_count, page_id=0, page_state=0)
+
+    assert read_menu_state(memory) is None

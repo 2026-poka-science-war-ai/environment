@@ -4,7 +4,7 @@ import logging
 from collections.abc import Mapping
 from typing import Final
 
-from .models import RaceProgress
+from .models import MenuState, RaceProgress
 from .services import GuestMemory, is_mapped
 from .types import GuestAddress, KartIndex, RaceCompletion, RacerCount, VsPoints
 
@@ -15,6 +15,18 @@ GAME_ID: Final[bytes] = b"RMCP01"
 RACE_MANAGER_POINTER: Final[GuestAddress] = GuestAddress(0x809BD730)
 
 RACE_CONFIG_POINTER: Final[GuestAddress] = GuestAddress(0x809BD728)
+
+SECTION_MANAGER_POINTER: Final[GuestAddress] = GuestAddress(0x809C1E38)
+
+_SECTION_LIFECYCLE_STATE_OFFSET: Final[int] = 0x30
+
+_SECTION_PAGE_ARRAY_OFFSET: Final[int] = 0x354
+
+_SECTION_PAGE_COUNT_OFFSET: Final[int] = 0x37C
+
+_PAGE_ID_OFFSET: Final[int] = 0x04
+
+_PAGE_STATE_OFFSET: Final[int] = 0x08
 
 _KART_ARRAY_OFFSET: Final[int] = 0x0C
 
@@ -41,6 +53,10 @@ _PLAYER_PREVIOUS_SCORE_OFFSET: Final[int] = 0xD8
 _PLAYER_FINISH_POSITION_OFFSET: Final[int] = 0xE2
 
 _POINTER_WIDTH: Final[int] = 4
+
+_SECTION_PAGE_CAPACITY: Final[int] = (
+    _SECTION_PAGE_COUNT_OFFSET - _SECTION_PAGE_ARRAY_OFFSET
+) // _POINTER_WIDTH
 
 
 def _follow(memory: GuestMemory, address: GuestAddress) -> GuestAddress | None:
@@ -174,3 +190,39 @@ def read_finish_positions(
         )
         for index in range(racer_count)
     }
+
+
+def section_manager(memory: GuestMemory) -> GuestAddress | None:
+    return _follow(memory, SECTION_MANAGER_POINTER)
+
+
+def _focused_page(
+    memory: GuestMemory, section: GuestAddress, page_count: int
+) -> GuestAddress | None:
+    slot = _SECTION_PAGE_ARRAY_OFFSET + _POINTER_WIDTH * (page_count - 1)
+    return _follow(memory, GuestAddress(section + slot))
+
+
+def read_menu_state(memory: GuestMemory) -> MenuState | None:
+    manager = section_manager(memory)
+    if manager is None:
+        return None
+    section = _follow(memory, manager)
+    if section is None:
+        return None
+
+    page_count = memory.s32(GuestAddress(section + _SECTION_PAGE_COUNT_OFFSET))
+    if not 1 <= page_count <= _SECTION_PAGE_CAPACITY:
+        return None
+    page = _focused_page(memory, section, page_count)
+    if page is None:
+        return None
+
+    return MenuState(
+        section_lifecycle_state=memory.s32(
+            GuestAddress(manager + _SECTION_LIFECYCLE_STATE_OFFSET)
+        ),
+        page_count=page_count,
+        page_id=memory.s32(GuestAddress(page + _PAGE_ID_OFFSET)),
+        page_state=memory.s32(GuestAddress(page + _PAGE_STATE_OFFSET)),
+    )
