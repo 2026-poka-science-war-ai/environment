@@ -16,6 +16,7 @@ from environment.competition.services import (
     decide_vs_session,
 )
 from environment.competition.types import SeatsByTeam, VsSessionVerdict
+from environment.scenario.functions import DriftPageUnrecognisedError
 from environment.scenario.types import PlayerSeat
 from environment.telemetry.types import VsPoints
 
@@ -65,11 +66,9 @@ def test_a_tied_session_refuses_to_name_a_winner() -> None:
 
 
 class _RecordedAttempts:
-    """Stands in for a raced session, and remembers what each attempt saw."""
-
     def __init__(
         self,
-        verdicts: Sequence[VsSessionVerdict | Literal["no result"]],
+        verdicts: Sequence[VsSessionVerdict | Literal["no result", "menus lost"]],
         video_file: Path,
     ) -> None:
         self._verdicts = verdicts
@@ -82,6 +81,8 @@ class _RecordedAttempts:
         verdict = self._verdicts[attempt - 1]
         if verdict == "no result":
             raise VsPointsUnavailableError("the session was truncated")
+        if verdict == "menus lost":
+            raise DriftPageUnrecognisedError("the drift page was not one of the two")
         return _outcome(verdict, attempt)
 
 
@@ -116,6 +117,18 @@ def test_a_cup_that_will_not_separate_the_teams_is_a_fault(tmp_path: Path) -> No
 def test_a_session_that_reaches_no_result_is_replayed(tmp_path: Path) -> None:
     video_file = tmp_path / "vs-race-1.mp4"
     attempts = _RecordedAttempts(["no result", "a"], video_file)
+
+    decided = decide_vs_session(
+        cup="Mushroom Cup", video_file=video_file, run_attempt=attempts
+    )
+
+    assert attempts.leftover_recordings == [False, False]
+    assert (decided.attempt, decided.winner) == (2, "a")
+
+
+def test_a_session_whose_menus_lose_their_way_is_replayed(tmp_path: Path) -> None:
+    video_file = tmp_path / "vs-race-1.mp4"
+    attempts = _RecordedAttempts(["menus lost", "a"], video_file)
 
     decided = decide_vs_session(
         cup="Mushroom Cup", video_file=video_file, run_attempt=attempts

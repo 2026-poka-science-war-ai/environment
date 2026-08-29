@@ -1,6 +1,7 @@
 from typing import Literal
 
-Mode = Literal["solo", "team"]
+Mode = Literal["solo"]
+
 Character = Literal[
     "Baby Mario",
     "Baby Luigi",

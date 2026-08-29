@@ -1,14 +1,30 @@
 import logging
+import time
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
 from typing import Final
 
 from wii_arena.dolphin import (
     Dolphin,
     DolphinAction,
+    DolphinFrameBuffer,
     DolphinGameCubeControllerInput,
     DolphinGameCubeControllerNoOp,
+    DolphinMemoryView,
 )
 
-from ..telemetry.types import KartIndex, RacerCount
+from ..telemetry.functions import (
+    focused_page,
+    read_joined_player_count,
+    read_menu_state,
+    read_race_stage,
+    read_rules_page,
+    read_selected_entry,
+    seat_is_choosing,
+)
+from ..telemetry.models import MenuState, RulesPage
+from ..telemetry.services import GuestMemory, GuestMemoryAddressError
+from ..telemetry.types import GuestAddress, KartIndex, RacerCount
 from .models import CHARACTER_SIZES, RaceConfiguration
 from .types import (
     Cc,
@@ -17,6 +33,7 @@ from .types import (
     CourseRule,
     Cpu,
     Cup,
+    DriftMode,
     ItemRule,
     PlayerSeat,
     Races,
@@ -27,14 +44,31 @@ from .types import (
 
 _LOGGER = logging.getLogger(__name__)
 
+
+class MenuNavigationError(RuntimeError): ...
+
+
+class MenuNavigationTimeoutError(MenuNavigationError): ...
+
+
+class DriftPageUnrecognisedError(MenuNavigationError): ...
+
+
+class MenuTargetMissedError(MenuNavigationError): ...
+
+
+class MenuPageUnreadableError(MenuNavigationError): ...
+
+
+class RulesNotTakenError(MenuNavigationError): ...
+
+
 CURSOR_NUDGE_FRAMES: Final[int] = 45
 RULE_SETTLE_FRAMES: Final[int] = 80
-PAGE_TRANSITION_FRAMES: Final[int] = 180
-SELECTION_CONFIRM_FRAMES: Final[int] = 220
-MODE_ENTRY_FRAMES: Final[int] = 400
 BOOT_SETTLE_FRAMES: Final[int] = 900
 BOOT_CONFIRM_FRAMES: Final[int] = 600
-DEFAULT_IDLE_FRAMES: Final[int] = 300
+
+_BOOT_PAGES_TO_CLEAR: Final[int] = 7
 
 _A = DolphinGameCubeControllerInput(a=True)
 _UP = DolphinGameCubeControllerInput(up=True)
@@ -52,24 +86,309 @@ def _to_action(inputs: dict[int, DolphinGameCubeControllerInput]) -> DolphinActi
     ]
 
 
-def _click(
+MenuCondition = Callable[[Dolphin.Session], bool]
+
+_MENU_SETTLED_STATE: Final[int] = 4
+
+_SECTION_IDLE_STATE: Final[int] = 0
+
+
+_TOP_MENU_PAGE: Final[int] = 90
+
+_SINGLE_PLAYER_PAGE: Final[int] = 105
+
+_JOIN_PAGE: Final[int] = 98
+
+_MULTIPLAYER_PAGE: Final[int] = 128
+
+_VS_HUB_PAGE: Final[int] = 114
+
+_RULES_PAGE: Final[int] = 115
+
+_CHARACTER_PAGE: Final[int] = 107
+
+_VEHICLE_PAGE: Final[int] = 129
+
+_SOLO_VEHICLE_PAGE: Final[int] = 108
+
+_CUP_PAGE: Final[int] = 110
+
+_COURSE_PAGE: Final[int] = 111
+
+_COURSE_CONFIRM_PAGE: Final[int] = 75
+
+_DRIFT_PAGE: Final[int] = 130
+
+_SOLO_DRIFT_PAGE: Final[int] = 109
+
+_CONDITION_HOLD_FRAMES: Final[int] = 15
+
+_PRESS_FRAMES: Final[int] = 3
+
+
+class _MenuSession(Dolphin.Session):
+    def __init__(self, session: Dolphin.Session, deadline: float) -> None:
+        self._session = session
+        self._deadline = deadline
+        self._frames = 0
+
+    @property
+    def frames(self) -> int:
+        return self._frames
+
+    def execute(self, action: DolphinAction) -> None:
+        self._session.execute(action)
+        self._frames += 1
+        if time.monotonic() >= self._deadline:
+            state = _menu_state(self)
+            raise MenuNavigationTimeoutError(
+                f"The menus did not reach the race within the session's time, "
+                f"after {self._frames} frames on page "
+                f"{state.page_id if state is not None else 'unknown'}"
+            )
+
+    def memory_view(self) -> DolphinMemoryView:
+        return self._session.memory_view()
+
+    @contextmanager
+    def frame_buffer(self) -> Generator[list[DolphinFrameBuffer], None, None]:
+        with self._session.frame_buffer() as screens:
+            yield screens
+
+
+def _vehicle_page(num_racers: int) -> int:
+    return _SOLO_VEHICLE_PAGE if num_racers == 1 else _VEHICLE_PAGE
+
+
+def _page_settles(page_id: int) -> MenuCondition:
+    """The course page is born settled and swallows presses for the twenty or
+    so frames it spends sliding in."""
+
+    def condition(session: Dolphin.Session) -> bool:
+        state = _menu_state(session)
+        return (
+            state is not None
+            and state.page_id == page_id
+            and state.page_state == _MENU_SETTLED_STATE
+            and state.accepts_input
+        )
+
+    return condition
+
+
+def _page_closes(page_id: int) -> MenuCondition:
+
+    def condition(session: Dolphin.Session) -> bool:
+        state = _menu_state(session)
+        return (
+            state is not None
+            and state.page_id == page_id
+            and state.page_state != _MENU_SETTLED_STATE
+        )
+
+    return condition
+
+
+def _another_page_settles(before: MenuState | None) -> MenuCondition:
+
+    def condition(session: Dolphin.Session) -> bool:
+        state = _menu_state(session)
+        if state is None or state.page_state != _MENU_SETTLED_STATE:
+            return False
+        if not state.accepts_input:
+            return False
+        if state.section_lifecycle_state != _SECTION_IDLE_STATE:
+            return False
+        return before is None or state.page_id != before.page_id
+
+    return condition
+
+
+def _seat_is_choosing(session: Dolphin.Session, seat: int) -> bool | None:
+    try:
+        return seat_is_choosing(GuestMemory(session.memory_view()), seat)
+    except GuestMemoryAddressError:
+        return None
+
+
+def _seat_confirms(session: Dolphin.Session, seat: int, page_id: int) -> MenuCondition:
+    before = _seat_is_choosing(session, seat)
+
+    def condition(session: Dolphin.Session) -> bool:
+        state = _menu_state(session)
+        if state is None or before is not True:
+            return False
+        if state.page_id != page_id:
+            return state.page_state == _MENU_SETTLED_STATE and state.accepts_input
+        return (
+            state.page_state == _MENU_SETTLED_STATE
+            and _seat_is_choosing(session, seat) is False
+        )
+
+    return condition
+
+
+CursorReader = Callable[[Dolphin.Session, int], int | None]
+
+_VEHICLE_CURSOR_OFFSET: Final[int] = 0xF94
+
+_VEHICLE_CURSOR_STRIDE: Final[int] = 0x5C8
+
+_CHARACTER_CURSOR_OFFSET: Final[int] = 0x838
+
+_CHARACTER_CURSOR_STRIDE: Final[int] = 0x04
+
+
+def _seat_cursor(
+    session: Dolphin.Session, seat: int, offset: int, stride: int
+) -> int | None:
+    try:
+        memory = GuestMemory(session.memory_view())
+        page = focused_page(memory)
+        if page is None:
+            return None
+        return memory.s32(GuestAddress(page + offset + stride * (seat - 1)))
+    except GuestMemoryAddressError:
+        return None
+
+
+def _vehicle_cursor(session: Dolphin.Session, seat: int) -> int | None:
+    return _seat_cursor(session, seat, _VEHICLE_CURSOR_OFFSET, _VEHICLE_CURSOR_STRIDE)
+
+
+def _character_cursor(session: Dolphin.Session, seat: int) -> int | None:
+    return _seat_cursor(
+        session, seat, _CHARACTER_CURSOR_OFFSET, _CHARACTER_CURSOR_STRIDE
+    )
+
+
+def _joined_players(session: Dolphin.Session, _seat: int) -> int | None:
+    state = _menu_state(session)
+    if state is None or state.page_id != _JOIN_PAGE:
+        return None
+    try:
+        return read_joined_player_count(GuestMemory(session.memory_view()))
+    except GuestMemoryAddressError:
+        return None
+
+
+def _selected_entry(page_id: int) -> CursorReader:
+
+    def read(session: Dolphin.Session, seat: int) -> int | None:
+        state = _menu_state(session)
+        if state is None or state.page_id != page_id:
+            return None
+        try:
+            return read_selected_entry(GuestMemory(session.memory_view()), seat)
+        except GuestMemoryAddressError:
+            return None
+
+    return read
+
+
+def _cursor_moves(
+    cursor: CursorReader, session: Dolphin.Session, seat: int
+) -> MenuCondition:
+    before = cursor(session, seat)
+
+    def condition(session: Dolphin.Session) -> bool:
+        current = cursor(session, seat)
+        return current is not None and current != before
+
+    return condition
+
+
+def _press_until(
     session: Dolphin.Session,
-    inputs: dict[int, DolphinGameCubeControllerInput],
+    seat: int,
+    toward: DolphinGameCubeControllerInput,
     *,
-    idle_frames: int = DEFAULT_IDLE_FRAMES,
-    press_frames: int = 3,
+    cursor: CursorReader,
+    target: int,
+    presses: int,
+    waiting_for: str,
+    nudge_frames: int = CURSOR_NUDGE_FRAMES,
 ) -> None:
-    action = _to_action(inputs)
-    idle_action: DolphinAction = [
+    budget = presses * (nudge_frames + _PRESS_FRAMES)
+    seen: list[int | None] = [cursor(session, seat)]
+    while budget > 0 and seen[-1] != target:
+        budget -= _click(
+            session,
+            {seat: toward},
+            idle_frames=min(nudge_frames, budget),
+            until=_cursor_moves(cursor, session, seat),
+            waiting_for=waiting_for,
+        )
+        seen.append(cursor(session, seat))
+
+    if seen[-1] != target:
+        raise MenuTargetMissedError(
+            f"{waiting_for} was left on {seen[-1]} rather than {target} after "
+            f"{presses * (nudge_frames + _PRESS_FRAMES)} frames, having read {seen}"
+        )
+
+
+def _menu_state(session: Dolphin.Session) -> MenuState | None:
+    try:
+        return read_menu_state(GuestMemory(session.memory_view()))
+    except GuestMemoryAddressError:
+        return None
+
+
+def _idle_action() -> DolphinAction:
+    return [
         DolphinGameCubeControllerNoOp(),
         DolphinGameCubeControllerNoOp(),
         DolphinGameCubeControllerNoOp(),
         DolphinGameCubeControllerNoOp(),
     ]
-    for _ in range(press_frames):
+
+
+def _blind_click(
+    session: Dolphin.Session,
+    inputs: dict[int, DolphinGameCubeControllerInput],
+    idle_frames: int,
+) -> None:
+    action = _to_action(inputs)
+    idle_action = _idle_action()
+    for _ in range(_PRESS_FRAMES):
         session.execute(action)
     for _ in range(idle_frames):
         session.execute(idle_action)
+
+
+def _click(
+    session: Dolphin.Session,
+    inputs: dict[int, DolphinGameCubeControllerInput],
+    *,
+    until: MenuCondition,
+    idle_frames: int | None = None,
+    waiting_for: str = "",
+) -> int:
+    action = _to_action(inputs)
+    idle_action = _idle_action()
+    spent = 0
+    for _ in range(_PRESS_FRAMES):
+        session.execute(action)
+        spent += 1
+
+    held_page: int | None = None
+    held_frames = 0
+    while idle_frames is None or spent - _PRESS_FRAMES < idle_frames:
+        session.execute(idle_action)
+        spent += 1
+        state = _menu_state(session)
+        if state is None or not until(session):
+            held_page, held_frames = None, 0
+            continue
+        if state.page_id != held_page:
+            held_page, held_frames = state.page_id, 0
+        held_frames += 1
+        if held_frames >= _CONDITION_HOLD_FRAMES:
+            return spent
+
+    _LOGGER.debug("%s had not registered after %d frames", waiting_for, idle_frames)
+    return spent
 
 
 _SINGLE_PLAYER_MENU: tuple[str, ...] = (
@@ -79,6 +398,8 @@ _SINGLE_PLAYER_MENU: tuple[str, ...] = (
     "Battle",
 )
 _MULTIPLAYER_MENU: tuple[str, ...] = ("VS Race", "Battle")
+
+_VS_HUB_MENU: tuple[str, ...] = ("Solo Race", "Team Race", "Rules")
 
 
 CHARACTER_POSITION_MAP: dict[Character, tuple[int, int]] = {
@@ -108,8 +429,39 @@ CHARACTER_POSITION_MAP: dict[Character, tuple[int, int]] = {
     "Dry Bowser": (5, 3),
 }
 
+CHARACTER_ID_MAP: dict[Character, int] = {
+    "Mario": 0,
+    "Baby Peach": 1,
+    "Waluigi": 2,
+    "Bowser": 3,
+    "Baby Daisy": 4,
+    "Dry Bones": 5,
+    "Baby Mario": 6,
+    "Luigi": 7,
+    "Toad": 8,
+    "Donkey Kong": 9,
+    "Yoshi": 10,
+    "Wario": 11,
+    "Baby Luigi": 12,
+    "Toadette": 13,
+    "Koopa Troopa": 14,
+    "Daisy": 15,
+    "Peach": 16,
+    "Birdo": 17,
+    "Diddy Kong": 18,
+    "King Boo": 19,
+    "Bowser Jr": 20,
+    "Dry Bowser": 21,
+    "Funky Kong": 22,
+    "Rosalina": 23,
+}
+
 _SHARED_ROW = max(row for row, _ in CHARACTER_POSITION_MAP.values()) + 1
 _SHARED_COLUMN = max(column for _, column in CHARACTER_POSITION_MAP.values())
+
+_CHARACTER_AT: dict[tuple[int, int], Character] = {
+    position: character for character, position in CHARACTER_POSITION_MAP.items()
+}
 
 _CHARACTER_DEFAULTS: dict[int, Character] = {
     1: "Mario",
@@ -117,40 +469,6 @@ _CHARACTER_DEFAULTS: dict[int, Character] = {
     3: "Yoshi",
     4: "Peach",
 }
-
-_VEHICLE_CHOICE_GRID: dict[VehicleSize, dict[str, tuple[tuple[Vehicle, ...], ...]]] = {
-    "small": {
-        "kart": (
-            ("Standard Kart S", "Baby Booster", "Concerto"),
-            ("Cheep Charger", "Rally Romper", "Blue Falcon"),
-        ),
-        "bike": (
-            ("Standard Bike S", "Bullet Bike", "Nanobike"),
-            ("Quacker", "Magikruiser", "Bubble Bike"),
-        ),
-    },
-    "medium": {
-        "kart": (
-            ("Standard Kart M", "Nostalgia 1", "Wild Wing"),
-            ("Turbo Blooper", "B Dasher MK 2", "Royal Racer"),
-        ),
-        "bike": (
-            ("Standard Bike M", "Mach Bike", "Bon Bon"),
-            ("Rapide", "Nitrocycle", "Dolphin Dasher"),
-        ),
-    },
-    "large": {
-        "kart": (
-            ("Standard Kart L", "Offroader", "Flame Flyer"),
-            ("Piranha Prowler", "Aero Glider", "Dragonetti"),
-        ),
-        "bike": (
-            ("Standard Bike L", "Bowser Bike", "Wario Bike"),
-            ("Twinkle Star", "Torpedo", "Phantom"),
-        ),
-    },
-}
-
 
 VEHICLE_CHOICE_QUEUE: dict[VehicleSize, list[Vehicle]] = {
     "small": [
@@ -197,18 +515,46 @@ VEHICLE_CHOICE_QUEUE: dict[VehicleSize, list[Vehicle]] = {
     ],
 }
 
+_VEHICLE_GRID_ROW_COUNT: Final[int] = 6
 
-def _build_vehicle_position_map() -> dict[Vehicle, tuple[int, int]]:
-    result: dict[Vehicle, tuple[int, int]] = {}
-    for size_grid in _VEHICLE_CHOICE_GRID.values():
-        for ui_col, vehicle_type in ((0, "kart"), (1, "bike")):
-            for block, column in enumerate(size_grid[vehicle_type]):
-                for row, vehicle in enumerate(column):
-                    result[vehicle] = (row + block * 3, ui_col)
-    return result
+_VEHICLE_KIND_STRIDE: Final[int] = 18
+
+_VEHICLE_SIZE_ORDER: Final[tuple[VehicleSize, ...]] = ("small", "medium", "large")
 
 
-VEHICLE_POSITION_MAP: dict[Vehicle, tuple[int, int]] = _build_vehicle_position_map()
+def _vehicle_position(entry: int) -> tuple[int, int]:
+    return entry % _VEHICLE_GRID_ROW_COUNT, entry // _VEHICLE_GRID_ROW_COUNT
+
+
+def _vehicle_identifier(size: VehicleSize, entry: int) -> int:
+    row, column = _vehicle_position(entry)
+    return (
+        _VEHICLE_KIND_STRIDE * column
+        + len(_VEHICLE_SIZE_ORDER) * row
+        + _VEHICLE_SIZE_ORDER.index(size)
+    )
+
+
+VEHICLE_POSITION_MAP: dict[Vehicle, tuple[int, int]] = {
+    vehicle: _vehicle_position(entry)
+    for queue in VEHICLE_CHOICE_QUEUE.values()
+    for entry, vehicle in enumerate(queue)
+}
+
+VEHICLE_ID_MAP: dict[Vehicle, int] = {
+    vehicle: _vehicle_identifier(size, entry)
+    for size, queue in VEHICLE_CHOICE_QUEUE.items()
+    for entry, vehicle in enumerate(queue)
+}
+
+_CUP_COLUMN_COUNT: Final[int] = 4
+
+_CUP_ROW_COUNT: Final[int] = 2
+
+
+def _cup_identifier(row: int, column: int) -> int:
+    return row * _CUP_COLUMN_COUNT + column
+
 
 CUP_POSITION_MAP: dict[Cup, tuple[int, int]] = {
     "Mushroom Cup": (0, 0),
@@ -255,6 +601,44 @@ COURSE_POSITION_MAP: dict[Course, int] = {
     "GCN DK Mountain": 2,
     "N64 Bowser's Castle": 3,
 }
+
+COURSE_ID_MAP: dict[Course, int] = {
+    "Luigi Circuit": 8,
+    "Moo Moo Meadows": 1,
+    "Mushroom Gorge": 2,
+    "Toad's Factory": 4,
+    "Mario Circuit": 0,
+    "Coconut Mall": 5,
+    "DK Summit": 6,
+    "Wario's Gold Mine": 7,
+    "Daisy Circuit": 9,
+    "Koopa Cape": 15,
+    "Maple Treeway": 11,
+    "Grumble Volcano": 3,
+    "Dry Dry Ruins": 14,
+    "Moonview Highway": 10,
+    "Bowser's Castle": 12,
+    "Rainbow Road": 13,
+    "GCN Peach Beach": 16,
+    "DS Yoshi Falls": 20,
+    "SNES Ghost Valley 2": 25,
+    "N64 Mario Raceway": 26,
+    "N64 Sherbet Land": 27,
+    "GBA Shy Guy Beach": 31,
+    "DS Delfino Square": 23,
+    "GCN Waluigi Stadium": 18,
+    "DS Desert Street": 21,
+    "GBA Bowser Castle 3": 30,
+    "N64 DK's Jungle Parkway": 29,
+    "GCN Mario Circuit": 17,
+    "SNES Mario Circuit 3": 24,
+    "DS Peach Gardens": 22,
+    "GCN DK Mountain": 19,
+    "N64 Bowser's Castle": 28,
+}
+
+_COURSES_PER_CUP: Final[int] = 4
+
 
 COURSE_TO_CUP_MAP: dict[Course, Cup] = {
     "Luigi Circuit": "Mushroom Cup",
@@ -311,16 +695,25 @@ def first_course_of_cup(cup: Cup) -> Course:
 
 _CC_ORDER: tuple[Cc, ...] = (50, 100, 150, "mirror")
 _CPU_ORDER: tuple[Cpu, ...] = ("easy", "normal", "hard", "off")
+
+_SOLO_CPU_ORDER: tuple[Cpu, ...] = ("easy", "normal", "hard")
+
 _VEHICLE_RULE_ORDER: tuple[VehicleRule, ...] = ("all", "karts", "bikes")
 _COURSE_RULE_ORDER: tuple[CourseRule, ...] = ("choose", "random", "in order")
 _ITEM_RULE_ORDER: tuple[ItemRule, ...] = ("recommended", "frantic", "basic", "none")
 _RACES_ORDER: tuple[Races, ...] = (2, 3, 4, 5, 8, 10, 12, 16, 32)
 
-_RACE_START_ATTEMPTS = 600
+_MENU_SEAT: Final[int] = 1
+
 VS_RACE_GRID_SIZE: Final[int] = 12
 
 
-def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
+def navigate(
+    session: Dolphin.Session,
+    configuration: RaceConfiguration,
+    deadline: float,
+) -> None:
+    menus = _MenuSession(session, deadline)
     racers = configuration.racers
     num_racers = len(racers)
 
@@ -329,96 +722,299 @@ def navigate(session: Dolphin.Session, configuration: RaceConfiguration) -> None
         num_racers,
         configuration.course,
     )
-    _enter_main_menu(session, num_racers)
+    _enter_main_menu(menus, num_racers)
 
-    for _ in range(num_racers - 1):
-        _click(session, {1: _RIGHT}, idle_frames=CURSOR_NUDGE_FRAMES)
-    _click(session, {1: _A}, idle_frames=MODE_ENTRY_FRAMES)
-
-    if num_racers == 1:
-        menu = _SINGLE_PLAYER_MENU
-    else:
-        menu = _MULTIPLAYER_MENU
-        for player in range(2, num_racers + 1):
-            _click(session, {player: _A}, idle_frames=CURSOR_NUDGE_FRAMES)
-        _click(session, {}, idle_frames=RULE_SETTLE_FRAMES)
-        _click(session, {1: _A}, idle_frames=PAGE_TRANSITION_FRAMES)
-
-    for _ in range(menu.index("VS Race")):
-        _click(session, {1: _DOWN}, idle_frames=CURSOR_NUDGE_FRAMES)
-    _click(session, {1: _A}, idle_frames=PAGE_TRANSITION_FRAMES)
-
-    _click(session, {1: _UP}, idle_frames=CURSOR_NUDGE_FRAMES)
-    _click(session, {1: _A}, idle_frames=PAGE_TRANSITION_FRAMES)
-    _select_rules(session, configuration)
-    _click(session, {1: _DOWN}, idle_frames=CURSOR_NUDGE_FRAMES)
-
-    if configuration.mode == "solo":
-        _click(session, {1: _A})
-    elif configuration.mode == "team":
-        _click(session, {1: _DOWN}, idle_frames=CURSOR_NUDGE_FRAMES)
-        _click(session, {1: _A})
-
-    _select_character(session, configuration)
-
-    if configuration.mode == "team":
-        _click(session, {player: _A for player in range(1, num_racers + 1)})
-        if num_racers > 1:
-            _click(session, {1: _A})
-
-    _select_vehicle(session, configuration)
+    _press_until(
+        menus,
+        _MENU_SEAT,
+        _RIGHT,
+        cursor=_selected_entry(_TOP_MENU_PAGE),
+        target=num_racers - 1,
+        presses=num_racers - 1,
+        waiting_for="the racer count",
+    )
+    _click(
+        menus,
+        {1: _A},
+        until=_another_page_settles(_menu_state(menus)),
+        waiting_for="the page the racer count opens",
+    )
 
     if num_racers == 1:
-        if racers[0].drift_mode == "automatic":
-            _click(session, {1: _UP}, idle_frames=CURSOR_NUDGE_FRAMES)
-            _click(session, {1: _A}, idle_frames=CURSOR_NUDGE_FRAMES)
-        elif racers[0].drift_mode == "manual":
-            _click(session, {1: _A}, idle_frames=CURSOR_NUDGE_FRAMES)
+        _press_until(
+            menus,
+            _MENU_SEAT,
+            _DOWN,
+            cursor=_selected_entry(_SINGLE_PLAYER_PAGE),
+            target=_SINGLE_PLAYER_MENU.index("VS Race"),
+            presses=len(_SINGLE_PLAYER_MENU),
+            waiting_for="VS Race on the single-player menu",
+        )
     else:
-        for player in range(1, num_racers + 1):
-            if racers[player - 1].drift_mode == "automatic":
-                _click(session, {player: _A}, idle_frames=CURSOR_NUDGE_FRAMES)
-            elif racers[player - 1].drift_mode == "manual":
-                _click(session, {player: _DOWN}, idle_frames=CURSOR_NUDGE_FRAMES)
-                _click(session, {player: _A}, idle_frames=CURSOR_NUDGE_FRAMES)
-    _click(session, {})
+        joining = _menu_state(menus)
+        for player in range(2, num_racers):
+            _press_until(
+                menus,
+                player,
+                _A,
+                cursor=_joined_players,
+                target=player,
+                presses=1,
+                waiting_for=f"player {player} joining",
+            )
+        _click(
+            menus,
+            {num_racers: _A},
+            until=_another_page_settles(joining),
+            waiting_for="the page the last guest's press opens",
+        )
+        _click(
+            menus,
+            {1: _A},
+            until=_page_settles(_MULTIPLAYER_PAGE),
+            waiting_for="the multiplayer menu",
+        )
+        _press_until(
+            menus,
+            _MENU_SEAT,
+            _UP,
+            cursor=_selected_entry(_MULTIPLAYER_PAGE),
+            target=_MULTIPLAYER_MENU.index("VS Race"),
+            presses=len(_MULTIPLAYER_MENU) - 1,
+            waiting_for="VS Race on the multiplayer menu",
+        )
 
-    _select_cup(session, configuration)
+    _click(
+        menus,
+        {1: _A},
+        until=_page_settles(_VS_HUB_PAGE),
+        waiting_for="the VS race menu",
+    )
 
-    _select_course(session, configuration)
+    _walk_vs_hub(menus, "Rules", _UP)
+    _click(
+        menus,
+        {1: _A},
+        until=_page_settles(_RULES_PAGE),
+        waiting_for="the rules page",
+    )
+    _select_rules(menus, configuration)
 
-    _wait_for_race(session, len(racers))
+    _walk_vs_hub(menus, "Solo Race", _DOWN)
+    _click(
+        menus,
+        {1: _A},
+        until=_page_settles(_CHARACTER_PAGE),
+        waiting_for="the character page",
+    )
+
+    _select_character(menus, configuration)
+
+    _select_vehicle(menus, configuration)
+
+    for player in range(1, num_racers + 1):
+        _select_drift_mode(menus, player, racers[player - 1].drift_mode)
+        _confirm_drift(menus, player)
+    _click(
+        menus,
+        {},
+        until=_page_settles(_CUP_PAGE),
+        waiting_for="the cup page",
+    )
+
+    _select_cup(menus, configuration)
+
+    _select_course(menus, configuration)
+
+    _wait_for_race(menus, len(racers))
+
+    _LOGGER.info("Navigated to the race in %d frames", menus.frames)
 
 
 def _enter_main_menu(session: Dolphin.Session, num_racers: int) -> None:
     all_a = {player: _A for player in range(1, num_racers + 1)}
-    _click(session, {}, idle_frames=BOOT_SETTLE_FRAMES)
-    _click(session, all_a, idle_frames=BOOT_CONFIRM_FRAMES)
+    _blind_click(session, {}, BOOT_SETTLE_FRAMES)
+    _blind_click(session, all_a, BOOT_CONFIRM_FRAMES)
 
-    for _ in range(7):
-        _click(session, all_a)
+    for _ in range(_BOOT_PAGES_TO_CLEAR):
+        _click(
+            session,
+            all_a,
+            until=_another_page_settles(_menu_state(session)),
+            waiting_for="the next boot page",
+        )
+
+
+def _rules_page(session: Dolphin.Session) -> RulesPage | None:
+    state = _menu_state(session)
+    if state is None or state.page_id != _RULES_PAGE:
+        return None
+    try:
+        return read_rules_page(GuestMemory(session.memory_view()))
+    except GuestMemoryAddressError:
+        return None
+
+
+def _rule_option_reader(row: int) -> CursorReader:
+
+    def read(session: Dolphin.Session, _seat: int) -> int | None:
+        page = _rules_page(session)
+        if page is None or page.focused_row != row:
+            return None
+        return page.option_of(row)
+
+    return read
+
+
+def _rule_is_taken(row: int) -> MenuCondition:
+
+    def condition(session: Dolphin.Session) -> bool:
+        page = _rules_page(session)
+        return page is not None and page.focused_row != row
+
+    return condition
+
+
+def _rule_walk(
+    option: int, target: int, option_count: int
+) -> tuple[DolphinGameCubeControllerInput, int]:
+    rightward = (target - option) % option_count
+    if rightward <= option_count - rightward:
+        return _RIGHT, rightward
+    return _LEFT, option_count - rightward
+
+
+def _rule_position(
+    session: Dolphin.Session, row: int, option_count: int, waiting_for: str
+) -> int:
+    page = _rules_page(session)
+    if page is None or page.focused_row != row:
+        raise MenuPageUnreadableError(f"{waiting_for} could not be read")
+
+    offered = page.option_count_of(row)
+    if offered != option_count:
+        raise MenuPageUnreadableError(
+            f"{waiting_for} offers {offered} options, not the {option_count} "
+            f"the macros name"
+        )
+
+    option = page.option_of(row)
+    if not 0 <= option < offered:
+        raise MenuPageUnreadableError(
+            f"{waiting_for} reads option {option}, which is not one of its {offered}"
+        )
+    return option
+
+
+def _select_rule(
+    session: Dolphin.Session, row: int, order: tuple[object, ...], selected_rule: object
+) -> object | None:
+    waiting_for = f"the rules page's row {row}"
+    target = order.index(selected_rule)
+    option = _rule_position(session, row, len(order), waiting_for)
+    toward, presses = _rule_walk(option, target, len(order))
+    _press_until(
+        session,
+        _MENU_SEAT,
+        toward,
+        cursor=_rule_option_reader(row),
+        target=target,
+        presses=presses,
+        nudge_frames=RULE_SETTLE_FRAMES,
+        waiting_for=waiting_for,
+    )
+    taken = _rule_option_reader(row)(session, _MENU_SEAT)
+    _click(
+        session,
+        {_MENU_SEAT: _A},
+        until=_rule_is_taken(row),
+        waiting_for=f"{waiting_for} to be taken",
+    )
+    if taken is None or not 0 <= taken < len(order):
+        return None
+    return order[taken]
+
+
+def _walk_vs_hub(
+    session: Dolphin.Session, entry: str, toward: DolphinGameCubeControllerInput
+) -> None:
+    _press_until(
+        session,
+        _MENU_SEAT,
+        toward,
+        cursor=_selected_entry(_VS_HUB_PAGE),
+        target=_VS_HUB_MENU.index(entry),
+        presses=len(_VS_HUB_MENU),
+        waiting_for=f"{entry} on the VS race menu",
+    )
 
 
 def _select_rules(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
-    rules: list[tuple[tuple[object, ...], object, int]] = [
-        (_CC_ORDER, configuration.cc, 1),
-        (_CPU_ORDER, configuration.cpu, 1),
-        (_VEHICLE_RULE_ORDER, configuration.vehicle_rule, 0),
-        (_COURSE_RULE_ORDER, configuration.course_rule, 0),
-        (_ITEM_RULE_ORDER, configuration.item_rule, 0),
-        (_RACES_ORDER, configuration.races, 2),
+    rules: tuple[tuple[tuple[object, ...], object], ...] = (
+        (_CC_ORDER, configuration.cc),
+        (
+            _CPU_ORDER if len(configuration.racers) > 1 else _SOLO_CPU_ORDER,
+            configuration.cpu,
+        ),
+        (_VEHICLE_RULE_ORDER, configuration.vehicle_rule),
+        (_COURSE_RULE_ORDER, configuration.course_rule),
+        (_ITEM_RULE_ORDER, configuration.item_rule),
+        (_RACES_ORDER, configuration.races),
+    )
+
+    taken = [
+        _select_rule(session, row, order, selected_rule)
+        for row, (order, selected_rule) in enumerate(rules)
     ]
+    wanted = [selected_rule for _, selected_rule in rules]
+    if taken != wanted:
+        raise RulesNotTakenError(f"the rules page took {taken} rather than {wanted}")
+    _LOGGER.info("The rules page was left on %s", taken)
 
-    for order, selected_rule, start_col in rules:
-        target_col = order.index(selected_rule)
-        col_shift = target_col - start_col
+    _click(
+        session,
+        {_MENU_SEAT: _A},
+        until=_page_settles(_VS_HUB_PAGE),
+        waiting_for="the VS race menu the rules close onto",
+    )
 
-        horizontal_move = _LEFT if col_shift <= 0 else _RIGHT
-        for _ in range(abs(col_shift)):
-            _click(session, {1: horizontal_move}, idle_frames=RULE_SETTLE_FRAMES)
-        _click(session, {1: _A}, idle_frames=RULE_SETTLE_FRAMES)
 
-    _click(session, {1: _A}, idle_frames=PAGE_TRANSITION_FRAMES)
+def _nudge_character(
+    session: Dolphin.Session, seat: int, toward: DolphinGameCubeControllerInput
+) -> None:
+    _click(
+        session,
+        {seat: toward},
+        until=_cursor_moves(_character_cursor, session, seat),
+        waiting_for=f"seat {seat}'s character cursor",
+    )
+
+
+def _walk_character(
+    session: Dolphin.Session,
+    seat: int,
+    toward: DolphinGameCubeControllerInput,
+    onto: Character,
+    presses: int,
+) -> None:
+    _press_until(
+        session,
+        seat,
+        toward,
+        cursor=_character_cursor,
+        target=CHARACTER_ID_MAP[onto],
+        presses=presses,
+        waiting_for=f"seat {seat}'s character cursor on {onto}",
+    )
+
+
+def _confirm_character(session: Dolphin.Session, seat: int) -> None:
+    _click(
+        session,
+        {seat: _A},
+        until=_seat_confirms(session, seat, _CHARACTER_PAGE),
+        waiting_for=f"seat {seat}'s character confirmation",
+    )
 
 
 def _select_character(
@@ -427,25 +1023,52 @@ def _select_character(
     racers = configuration.racers
     num_racers = len(racers)
 
+    last_row = _SHARED_ROW - 1
     for player in reversed(range(1, num_racers + 1)):
         row, column = CHARACTER_POSITION_MAP[_CHARACTER_DEFAULTS[player]]
-        for _ in range(_SHARED_COLUMN - column):
-            _click(session, {player: _RIGHT}, idle_frames=CURSOR_NUDGE_FRAMES)
-        for _ in range(_SHARED_ROW - row):
-            _click(session, {player: _DOWN}, idle_frames=CURSOR_NUDGE_FRAMES)
+        _walk_character(
+            session,
+            player,
+            _RIGHT,
+            _CHARACTER_AT[row, _SHARED_COLUMN],
+            _SHARED_COLUMN - column,
+        )
+        _walk_character(
+            session,
+            player,
+            _DOWN,
+            _CHARACTER_AT[last_row, _SHARED_COLUMN],
+            last_row - row,
+        )
+        _nudge_character(session, player, _DOWN)
 
     for player in sorted(
         range(1, num_racers + 1),
         key=lambda seat: CHARACTER_POSITION_MAP[racers[seat - 1].character],
     ):
-        row, column = CHARACTER_POSITION_MAP[racers[player - 1].character]
-        for _ in range(_SHARED_ROW - row):
-            _click(session, {player: _UP}, idle_frames=CURSOR_NUDGE_FRAMES)
-        for _ in range(_SHARED_COLUMN - column):
-            _click(session, {player: _LEFT}, idle_frames=CURSOR_NUDGE_FRAMES)
-        _click(session, {player: _A}, idle_frames=CURSOR_NUDGE_FRAMES)
+        character = racers[player - 1].character
+        row, column = CHARACTER_POSITION_MAP[character]
+        _walk_character(
+            session, player, _UP, _CHARACTER_AT[row, _SHARED_COLUMN], _SHARED_ROW - row
+        )
+        _walk_character(session, player, _LEFT, character, _SHARED_COLUMN - column)
+        _confirm_character(session, player)
 
-    _click(session, {})
+    _click(
+        session,
+        {},
+        until=_page_settles(_vehicle_page(num_racers)),
+        waiting_for="the vehicle page",
+    )
+
+
+def _confirm_vehicle(session: Dolphin.Session, seat: int, page_id: int) -> None:
+    _click(
+        session,
+        {seat: _A},
+        until=_seat_confirms(session, seat, page_id),
+        waiting_for=f"seat {seat}'s vehicle confirmation",
+    )
 
 
 def _select_vehicle(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
@@ -454,61 +1077,164 @@ def _select_vehicle(session: Dolphin.Session, configuration: RaceConfiguration) 
     is_grid = num_racers == 1
     for player in range(1, num_racers + 1):
         selected_vehicle = racers[player - 1].vehicle
+        target_size = CHARACTER_SIZES[racers[player - 1].character]
 
         if is_grid:
-            target_row, target_col = VEHICLE_POSITION_MAP[selected_vehicle]
-
-            vertical_move = _UP if target_row <= 0 else _DOWN
-            for _ in range(abs(target_row)):
-                _click(
-                    session, {player: vertical_move}, idle_frames=CURSOR_NUDGE_FRAMES
-                )
-
-            horizontal_move = _LEFT if target_col <= 0 else _RIGHT
-            for _ in range(abs(target_col)):
-                _click(
-                    session, {player: horizontal_move}, idle_frames=CURSOR_NUDGE_FRAMES
-                )
-            _click(session, {player: _A}, idle_frames=SELECTION_CONFIRM_FRAMES)
+            target_row, target_column = VEHICLE_POSITION_MAP[selected_vehicle]
+            cursor = _selected_entry(_SOLO_VEHICLE_PAGE)
+            _press_until(
+                session,
+                player,
+                _DOWN,
+                cursor=cursor,
+                target=VEHICLE_ID_MAP[VEHICLE_CHOICE_QUEUE[target_size][target_row]],
+                presses=_VEHICLE_GRID_ROW_COUNT,
+                waiting_for=f"seat {player}'s vehicle row",
+            )
+            _press_until(
+                session,
+                player,
+                _RIGHT if target_column > 0 else _LEFT,
+                cursor=cursor,
+                target=VEHICLE_ID_MAP[selected_vehicle],
+                presses=1,
+                waiting_for=f"seat {player}'s {selected_vehicle}",
+            )
+            _confirm_vehicle(session, player, _vehicle_page(num_racers))
 
         else:
-            target_size = CHARACTER_SIZES[racers[player - 1].character]
-            for vehicle in VEHICLE_CHOICE_QUEUE[target_size]:
-                _click(
-                    session,
-                    {player: DolphinGameCubeControllerInput()},
-                    idle_frames=CURSOR_NUDGE_FRAMES,
-                )
-                if vehicle == selected_vehicle:
-                    _click(session, {player: _A}, idle_frames=SELECTION_CONFIRM_FRAMES)
-                    break
-                _click(session, {player: _RIGHT}, idle_frames=CURSOR_NUDGE_FRAMES)
+            entry = VEHICLE_CHOICE_QUEUE[target_size].index(selected_vehicle)
+            _press_until(
+                session,
+                player,
+                _RIGHT,
+                cursor=_vehicle_cursor,
+                target=entry,
+                presses=entry,
+                waiting_for=f"seat {player}'s vehicle cursor",
+            )
+            _confirm_vehicle(session, player, _vehicle_page(num_racers))
+
+
+def _drift_entry(page_id: int, seat: int, mode: DriftMode) -> int | None:
+    if page_id == _DRIFT_PAGE:
+        return 2 * (seat - 1) + (0 if mode == "automatic" else 1)
+    if page_id == _SOLO_DRIFT_PAGE:
+        return 1 if mode == "automatic" else 0
+    return None
+
+
+def _select_drift_mode(session: Dolphin.Session, seat: int, mode: DriftMode) -> None:
+    state = _menu_state(session)
+    target = None if state is None else _drift_entry(state.page_id, seat, mode)
+    if state is None or target is None:
+        raise DriftPageUnrecognisedError(
+            f"seat {seat} was left on "
+            f"{'no page at all' if state is None else f'page {state.page_id}'}, "
+            f"which is neither of the drift pages ({_DRIFT_PAGE} and "
+            f"{_SOLO_DRIFT_PAGE}), so the entry its {mode} drift sits at cannot "
+            f"be named"
+        )
+    _press_until(
+        session,
+        seat,
+        _UP if mode == "automatic" else _DOWN,
+        cursor=_selected_entry(state.page_id),
+        target=target,
+        presses=1,
+        waiting_for=f"seat {seat}'s drift cursor",
+    )
+
+
+def _confirm_drift(session: Dolphin.Session, seat: int) -> None:
+    state = _menu_state(session)
+    if state is None:
+        raise MenuPageUnreadableError(
+            f"seat {seat}'s drift confirmation cannot name the page it is made on"
+        )
+    _click(
+        session,
+        {seat: _A},
+        until=_seat_confirms(session, seat, state.page_id),
+        waiting_for=f"seat {seat}'s drift confirmation",
+    )
 
 
 def _select_cup(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
-    target_row, target_col = CUP_POSITION_MAP[COURSE_TO_CUP_MAP[configuration.course]]
+    cup = COURSE_TO_CUP_MAP[configuration.course]
+    target_row, target_column = CUP_POSITION_MAP[cup]
+    cursor = _selected_entry(_CUP_PAGE)
+    opened_on = cursor(session, _MENU_SEAT)
+    if opened_on is None:
+        raise MenuPageUnreadableError(
+            "the cup page could not be read, so the column to walk down is unknown"
+        )
+    column = opened_on % _CUP_COLUMN_COUNT
 
-    for _ in range(target_row):
-        _click(session, {1: _DOWN}, idle_frames=CURSOR_NUDGE_FRAMES)
+    _press_until(
+        session,
+        _MENU_SEAT,
+        _DOWN,
+        cursor=cursor,
+        target=_cup_identifier(target_row, column),
+        presses=_CUP_ROW_COUNT,
+        waiting_for=f"the {cup}'s row",
+    )
+    _press_until(
+        session,
+        _MENU_SEAT,
+        _RIGHT,
+        cursor=cursor,
+        target=_cup_identifier(target_row, target_column),
+        presses=_CUP_COLUMN_COUNT,
+        waiting_for=f"the {cup}",
+    )
 
-    for _ in range(target_col):
-        _click(session, {1: _RIGHT}, idle_frames=CURSOR_NUDGE_FRAMES)
-
-    _click(session, {1: _A}, idle_frames=PAGE_TRANSITION_FRAMES)
+    _click(
+        session,
+        {1: _A},
+        until=_page_settles(_COURSE_PAGE),
+        waiting_for="the course page",
+    )
 
 
 def _select_course(session: Dolphin.Session, configuration: RaceConfiguration) -> None:
-    target_index = COURSE_POSITION_MAP[configuration.course]
-    for _ in range(target_index):
-        _click(session, {1: _DOWN}, idle_frames=CURSOR_NUDGE_FRAMES)
-    _click(session, {1: _A}, idle_frames=PAGE_TRANSITION_FRAMES)
-    _click(session, {1: _A})
+    _press_until(
+        session,
+        _MENU_SEAT,
+        _DOWN,
+        cursor=_selected_entry(_COURSE_PAGE),
+        target=COURSE_ID_MAP[configuration.course],
+        presses=_COURSES_PER_CUP,
+        waiting_for=f"the {configuration.course}",
+    )
+    _click(
+        session,
+        {1: _A},
+        until=_page_settles(_COURSE_CONFIRM_PAGE),
+        waiting_for="the course confirmation",
+    )
+    _click(
+        session,
+        {1: _A},
+        until=_page_closes(_COURSE_CONFIRM_PAGE),
+        waiting_for="the course confirmation to close",
+    )
+
+
+def _race_stage(session: Dolphin.Session) -> int | None:
+    try:
+        return read_race_stage(GuestMemory(session.memory_view()))
+    except GuestMemoryAddressError:
+        return None
 
 
 def _wait_for_race(session: Dolphin.Session, num_racers: int) -> None:
-    for _ in range(_RACE_START_ATTEMPTS):
-        _click(session, {}, idle_frames=CURSOR_NUDGE_FRAMES)
+    idle = _idle_action()
+    while True:
+        session.execute(idle)
+        if _race_stage(session) is None:
+            continue
         with session.frame_buffer() as screens:
             if len(screens) > num_racers:
                 return
-    raise TimeoutError("Timed out waiting for the race to start.")

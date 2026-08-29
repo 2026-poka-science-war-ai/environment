@@ -16,7 +16,7 @@ from wii_arena.dolphin import (
 
 from ..arena import Player, PlayerAgent
 from ..record import Recorder, find_audio_dumps, mux
-from ..scenario.functions import kart_of_seat
+from ..scenario.functions import MenuNavigationError, kart_of_seat
 from ..scenario.services import (
     MarioKartWiiRace,
     VsSessionLifecycle,
@@ -149,7 +149,6 @@ def _log_progress(cup: Cup, frame: int, lifecycle: VsSessionLifecycle) -> None:
 def build_seat_agents(
     configuration: CompetitionConfiguration, seats_by_team: SeatsByTeam
 ) -> Mapping[PlayerSeat, PlayerAgent]:
-    """Binds each team's models, in the order submitted, to its drawn seats."""
     return {
         seat: PlayerAgent(
             Player(
@@ -297,12 +296,12 @@ def decide_vs_session(
         video_file.unlink(missing_ok=True)
         try:
             outcome = run_attempt(attempt=attempt)
-        except VsPointsUnavailableError as failure:
+        except (VsPointsUnavailableError, MenuNavigationError) as failure:
             if attempt == max_attempts:
                 raise VsPointsUnavailableError(
                     f"{cup} reached no result in {max_attempts} attempts"
                 ) from failure
-            _LOGGER.warning("%s did not reach a result; replaying it", cup)
+            _LOGGER.warning("%s did not reach a result; replaying it: %s", cup, failure)
             continue
         if outcome.scores.verdict != "tie":
             return outcome

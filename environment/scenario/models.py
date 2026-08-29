@@ -128,3 +128,9 @@ class RaceConfiguration(BaseModel):
         if repeated:
             raise ValueError(f"racers must pick distinct characters, got {repeated}")
         return racers
+
+    @model_validator(mode="after")
+    def validate_cpu(self) -> Self:
+        if len(self.racers) == 1 and self.cpu == "off":
+            raise ValueError("a single racer cannot race with the CPUs off")
+        return self

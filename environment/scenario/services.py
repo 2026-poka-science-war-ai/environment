@@ -74,8 +74,6 @@ FrameObserver = Callable[[DolphinFrameBuffer], None]
 
 
 class _ObservedDolphinSession(Dolphin.Session):
-    """Every frame the menu macros execute passes through here."""
-
     def __init__(self, session: Dolphin.Session, observe: FrameObserver) -> None:
         self._session = session
         self._observe = observe
@@ -112,8 +110,6 @@ class _ObservedDolphinSession(Dolphin.Session):
 
 
 class VsSessionLifecycle:
-    """Read it freely; only the scenario's session drives it, through `observe`."""
-
     def __init__(self, race_count: int, racer_count: RacerCount) -> None:
         self._race_count = race_count
         self._racer_count = racer_count
@@ -180,8 +176,12 @@ class VsSessionLifecycle:
         )
 
     @property
+    def deadline(self) -> float:
+        return self._started_at + _SESSION_TIME_BUDGET_SECONDS
+
+    @property
     def has_exhausted_budget(self) -> bool:
-        return time.monotonic() - self._started_at >= _SESSION_TIME_BUDGET_SECONDS
+        return time.monotonic() >= self.deadline
 
     @property
     def should_advance_menu(self) -> bool:
@@ -307,6 +307,7 @@ class MarioKartWiiRace(DolphinScenario):
                 if self._observe_frame is None
                 else _ObservedDolphinSession(dolphin_session, self._observe_frame),
                 self._configuration,
+                self._lifecycle.deadline,
             )
             yield MarioKartWiiRace.Session(
                 dolphin_session=dolphin_session,
@@ -315,8 +316,6 @@ class MarioKartWiiRace(DolphinScenario):
             _LOGGER.info("Closing MarioKartWiiRace session")
 
     def control(self, action: DolphinAction) -> DolphinAction:
-        """Every action must be routed through this: the environment has no hook
-        that lets a scenario take the controllers for the menus between races."""
         self._step_index += 1
         if self._lifecycle.is_session_complete:
             return self._lifecycle.session_end_action()
