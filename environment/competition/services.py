@@ -12,6 +12,7 @@ from wii_arena.dolphin import (
     DolphinAction,
     DolphinEnvironment,
     DolphinObservation,
+    DolphinSessionLost,
 )
 
 from ..arena import Player, PlayerAgent
@@ -296,7 +297,11 @@ def decide_vs_session(
         video_file.unlink(missing_ok=True)
         try:
             outcome = run_attempt(attempt=attempt)
-        except (VsPointsUnavailableError, MenuNavigationError) as failure:
+        except (
+            VsPointsUnavailableError,
+            MenuNavigationError,
+            DolphinSessionLost,
+        ) as failure:
             if attempt == max_attempts:
                 raise VsPointsUnavailableError(
                     f"{cup} reached no result in {max_attempts} attempts"
